@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import pygame
+import pygame.gfxdraw
 import numpy as np
 
 import IPython
@@ -8,6 +9,9 @@ import IPython
 SCREEN_WIDTH = 640
 SCREEN_HEIGHT = 640
 DIAG = np.sqrt(SCREEN_WIDTH**2 + SCREEN_HEIGHT**2)
+SCREEN_VERTS = np.array(
+    [[0, 0], [SCREEN_WIDTH, 0], [SCREEN_WIDTH, SCREEN_HEIGHT], [0, SCREEN_HEIGHT]]
+)
 
 DELAY = 10  # milliseconds
 
@@ -35,15 +39,32 @@ def orth(v):
 
 
 # TODO need this to properly do the occlusions
-# def line_line_intersection(p11, p12, p21, p22):
-#     q1 = p2 - p1
-#     q2 = p4 - p3
-#
-#     d = q1[0] * q2[1] - q1[1] * q2[0]
-#     if np.isclose(d, 0):
-#         pass
-#
-#     x = (p1[0] * p2[1] - p1[1] * p2[0]) *
+def line_line_intersection(p1, v1, p2, v2):
+    # parallel
+    if np.isclose(orth(v1) @ v2, 0):
+        return None
+
+    A = np.array([[-v1 @ v1, v1 @ v2], [-v1 @ v2, v2 @ v2]])
+    b = np.array([v1 @ (p1 - p2), v2 @ (p1 - p2)])
+    t = np.linalg.solve(A, b)
+    return p1 + t[0] * v1, ts
+
+
+def line_screen_edge_intersection(p, v):
+    ts = []
+
+    # vertical edges
+    if not np.isclose(v[0], 0):
+        ts.extend([-p[0] / v[0], (SCREEN_WIDTH - p[0]) / v[0]])
+
+    # horizontal edges
+    if not np.isclose(v[1], 0):
+        ts.extend([-p[1] / v[1], (SCREEN_HEIGHT - p[1]) / v[1]])
+
+    # return the smallest positive value
+    ts = np.array(ts)
+    t = np.min(ts[ts >= 0])
+    return p + t * v
 
 
 class Obstacle:
@@ -58,22 +79,48 @@ class Obstacle:
         # vertices of the box
         self.verts = np.array([[x, y], [x + w, y], [x + w, y + h], [x, y + h]])
 
-    def compute_occlusion(self, point, tol=1e-3):
-        points = []
+    def _compute_witness_vertices(self, point, tol=1e-3):
+        right = None
+        left = None
         for i in range(len(self.verts)):
             vert = self.verts[i]
             delta = vert - point
             normal = orth(delta)
             dists = (self.verts - point) @ normal
             if np.all(dists >= -tol):
-                extra = vert + DIAG * delta / np.linalg.norm(delta)
-                points.append(vert)
-                points.append(extra)
+                right = vert
             elif np.all(dists <= tol):
-                extra = vert + DIAG * delta / np.linalg.norm(delta)
-                points.append(extra)
-                points.append(vert)
-        return points
+                left = vert
+            if left is not None and right is not None:
+                break
+        return right, left
+
+    def compute_occlusion(self, point, tol=1e-3):
+        right, left = self._compute_witness_vertices(point, tol=tol)
+
+        delta_right = right - point
+        extra_right = line_screen_edge_intersection(right, delta_right)
+        normal_right = orth(delta_right)
+
+        delta_left = left - point
+        extra_left = line_screen_edge_intersection(left, delta_left)
+        normal_left = orth(delta_left)
+
+        screen_dists = []
+        screen_vs = []
+        for v in SCREEN_VERTS:
+            if -(v - point) @ normal_left < 0:
+                continue
+            dist = (v - point) @ normal_right
+            if dist >= 0:
+                if len(screen_dists) > 0 and screen_dists[0] > dist:
+                    screen_vs = [v, screen_vs[0]]
+                    break
+                else:
+                    screen_dists.append(dist)
+                    screen_vs.append(v)
+
+        return [right, extra_right] + screen_vs + [extra_left, left]
 
     def draw(self, surface):
         pygame.draw.rect(surface, self.color, self.rect)
@@ -98,8 +145,8 @@ class Game:
 
         # TODO
         self.obstacles = [
-            Obstacle(300, 300, 100, 100, color=(100, 100, 100)),
-            Obstacle(500, 300, 100, 20, color=(100, 100, 100)),
+            Obstacle(300, 300, 100, 100, color=(0, 0, 0)),
+            Obstacle(500, 300, 100, 20, color=(0, 0, 0)),
         ]
 
         pygame.display.flip()
@@ -112,8 +159,16 @@ class Game:
             projectile.draw(self.screen)
 
         for obstacle in self.obstacles:
+            # obstacle.draw(self.screen)
+            # v1, v2 = obstacle._compute_witness_vertices(self.player.position)
+            # pygame.draw.circle(self.screen, (0, 0, 255), v1, 3)
+            # pygame.draw.circle(self.screen, (0, 255, 0), v2, 3)
+
             ps = obstacle.compute_occlusion(self.player.position)
-            pygame.draw.polygon(self.screen, (100, 100, 100), ps)
+            # pygame.draw.polygon(self.screen, (100, 100, 100), ps)
+            pygame.gfxdraw.aapolygon(self.screen, ps, (100, 100, 100))
+            pygame.gfxdraw.filled_polygon(self.screen, ps, (100, 100, 100))
+            # pygame.draw.aalines(self.screen, color=(100, 100, 100), closed=True, points=ps)
             obstacle.draw(self.screen)
 
             # for w in ws:
