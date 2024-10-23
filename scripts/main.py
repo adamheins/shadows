@@ -2,8 +2,8 @@
 import pygame
 import pygame.gfxdraw
 import numpy as np
-
-import IPython
+import pymunk
+import pymunk.pygame_util
 
 
 SCREEN_WIDTH = 640
@@ -13,9 +13,12 @@ SCREEN_VERTS = np.array(
     [[0, 0], [SCREEN_WIDTH, 0], [SCREEN_WIDTH, SCREEN_HEIGHT], [0, SCREEN_HEIGHT]]
 )
 
-DELAY = 10  # milliseconds
+PHYSICS_STEP_PER_FRAME = 10
+FRAMERATE = 60
+TIMESTEP = 1.0 / (FRAMERATE * PHYSICS_STEP_PER_FRAME)
 
-MOVE_STEP = 2
+PLAYER_VELOCITY = 100  # px per second
+BULLET_VELOCITY = 1000
 
 
 class Circle:
@@ -28,14 +31,15 @@ class Circle:
         pygame.draw.circle(surface, self.color, self.position, self.radius)
 
 
-class Projectile(Circle):
-    def __init__(self, position, velocity, radius, color):
-        self.velocity = velocity
-        super().__init__(position, radius, color)
-
-
 def orth(v):
     return np.array([v[1], -v[0]])
+
+
+def unit(v):
+    norm = np.linalg.norm(v)
+    if np.isclose(v, 0):
+        return np.zeros_like(v)
+    return v / norm
 
 
 # TODO need this to properly do the occlusions
@@ -68,7 +72,7 @@ def line_screen_edge_intersection(p, v):
 
 
 class Obstacle:
-    def __init__(self, x, y, w, h, color):
+    def __init__(self, space, x, y, w, h, color):
         self.x = x
         self.y = y
         self.w = w
@@ -78,6 +82,10 @@ class Obstacle:
 
         # vertices of the box
         self.verts = np.array([[x, y], [x + w, y], [x + w, y + h], [x, y + h]])
+
+        self.shape = pymunk.Poly(body=space.static_body, vertices=self.verts.tolist())
+        self.shape.collision_type = 0
+        space.add(self.shape)
 
     def _compute_witness_vertices(self, point, tol=1e-3):
         right = None
@@ -122,8 +130,59 @@ class Obstacle:
 
         return [right, extra_right] + screen_vs + [extra_left, left]
 
-    def draw(self, surface):
+    def draw(self, surface, viewpoint=None):
+        if viewpoint is not None:
+            ps = self.compute_occlusion(viewpoint)
+            pygame.gfxdraw.aapolygon(surface, ps, (100, 100, 100))
+            pygame.gfxdraw.filled_polygon(surface, ps, (100, 100, 100))
+
         pygame.draw.rect(surface, self.color, self.rect)
+
+
+class Player:
+    def __init__(self, space, position):
+        # self.body = pymunk.Body(body_type=pymunk.Body.KINEMATIC)
+        self.body = pymunk.Body(5, float("inf"))
+        self.body.position = position
+
+        self.shape = pymunk.Circle(self.body, 10, (0, 0))
+        self.shape.color = (255, 0, 0, 255)
+        self.shape.collision_type = 1
+
+        space.add(self.body, self.shape)
+
+    @property
+    def position(self):
+        return self.body.position
+
+    @property
+    def velocity(self):
+        return self.body.velocity
+
+    @velocity.setter
+    def velocity(self, value):
+        self.body.velocity = tuple(value)
+
+    def draw(self, surface):
+        # pygame.gfxdraw.aacircle(surface, int(self.position[0]), int(self.position[1]),
+        #                         int(self.shape.radius), self.shape.color)
+        pygame.draw.circle(surface, self.shape.color, self.position, self.shape.radius)
+
+
+class Projectile:
+    def __init__(self, space, position, velocity):
+        self.body = pymunk.Body(0.1, float("inf"))
+        self.body.position = tuple(position)
+        self.body.velocity = tuple(velocity)
+
+        self.shape = pymunk.Circle(self.body, 3, (0, 0))
+        self.shape.color = (0, 0, 0, 255)
+        self.shape.collision_type = 2
+
+        space.add(self.body, self.shape)
+
+    def draw(self, surface):
+        pygame.draw.circle(surface, self.shape.color, self.body.position, self.shape.radius)
 
 
 class Controller:
@@ -133,53 +192,57 @@ class Controller:
 
 class Game:
     def __init__(self):
+        self.space = pymunk.Space()
+
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         self.clock = pygame.time.Clock()
         self.screen.fill((255, 255, 255))
+        pygame.display.flip()
 
         self.keys_down = set()
 
         # TODO put in Controller
-        self.player = Circle(position=[200, 200], radius=10, color=(255, 0, 0))
         self.projectiles = []
 
         # TODO
         self.obstacles = [
-            Obstacle(300, 300, 100, 100, color=(0, 0, 0)),
-            Obstacle(500, 300, 100, 20, color=(0, 0, 0)),
+            Obstacle(self.space, 300, 300, 100, 100, color=(0, 0, 0)),
+            Obstacle(self.space, 500, 300, 100, 20, color=(0, 0, 0)),
         ]
 
-        pygame.display.flip()
+        self.player = Player(space=self.space, position=[200, 200])
+
+        def bullet_obstacle_handler(arbiter, space, data):
+            # print(arbiter.shapes[1].body.velocity)
+            # v = arbiter.shapes[1].body.velocity
+            # n = arbiter.normal
+            # t = orth(n)
+            # # TODO apparently this does not work
+            # arbiter.shapes[1].body.velocity = tuple((v @ t) * t)
+            print("pow")
+            # TODO need to remove the projectile itself too...
+            space.remove(arbiter.shapes[1].body, arbiter.shapes[1])
+            return False
+
+        self.space.add_collision_handler(0, 2).begin = bullet_obstacle_handler
+        # self.draw_options = pymunk.pygame_util.DrawOptions(self.screen)
 
     def draw(self):
         self.screen.fill((255, 255, 255))
+
         self.player.draw(self.screen)
+
+        for obstacle in self.obstacles:
+            obstacle.draw(self.screen, viewpoint=self.player.position)
 
         for projectile in self.projectiles:
             projectile.draw(self.screen)
-
-        for obstacle in self.obstacles:
-            # obstacle.draw(self.screen)
-            # v1, v2 = obstacle._compute_witness_vertices(self.player.position)
-            # pygame.draw.circle(self.screen, (0, 0, 255), v1, 3)
-            # pygame.draw.circle(self.screen, (0, 255, 0), v2, 3)
-
-            ps = obstacle.compute_occlusion(self.player.position)
-            # pygame.draw.polygon(self.screen, (100, 100, 100), ps)
-            pygame.gfxdraw.aapolygon(self.screen, ps, (100, 100, 100))
-            pygame.gfxdraw.filled_polygon(self.screen, ps, (100, 100, 100))
-            # pygame.draw.aalines(self.screen, color=(100, 100, 100), closed=True, points=ps)
-            obstacle.draw(self.screen)
-
-            # for w in ws:
-            #     pygame.draw.circle(self.screen, (0, 0, 255), w, 3)
-            # for e in es:
-            #     pygame.draw.circle(self.screen, (0, 0, 255), w, 3)
 
         pygame.display.flip()
 
     def loop(self):
         while True:
+
             target = None
 
             # process events
@@ -195,19 +258,19 @@ class Game:
                     target = np.array(pygame.mouse.get_pos())
 
             # respond to events
-            move_step = np.zeros(2)
+            velocity = np.zeros(2)
             if pygame.K_d in self.keys_down:
-                move_step[0] += 1
+                velocity[0] += 1
             if pygame.K_a in self.keys_down:
-                move_step[0] -= 1
+                velocity[0] -= 1
             if pygame.K_w in self.keys_down:
-                move_step[1] -= 1
+                velocity[1] -= 1
             if pygame.K_s in self.keys_down:
-                move_step[1] += 1
-            norm = np.linalg.norm(move_step)
+                velocity[1] += 1
+            norm = np.linalg.norm(velocity)
             if norm > 0:
-                move_step = MOVE_STEP * move_step / norm
-            self.player.position += move_step
+                velocity = PLAYER_VELOCITY * velocity / norm
+            self.player.velocity = tuple(velocity)
 
             if target is not None:
                 # TODO make a new projectile with appropriate direction and
@@ -215,27 +278,36 @@ class Game:
                 norm = np.linalg.norm(target - self.player.position)
                 if norm > 0:
                     direction = (target - self.player.position) / norm
+
                     projectile = Projectile(
-                        position=self.player.position.copy(),
-                        velocity=10 * direction,
-                        radius=3,
-                        color=(0, 0, 0),
+                        space=self.space,
+                        position=self.player.position,
+                        velocity=BULLET_VELOCITY * direction,
                     )
                 self.projectiles.append(projectile)
-
-            for projectile in self.projectiles:
-                projectile.position += projectile.velocity
-                if (
-                    projectile.position[0] < -projectile.radius
-                    or projectile.position[1] < -projectile.radius
-                    or projectile.position[0] > SCREEN_WIDTH + projectile.radius
-                    or projectile.position[1] > SCREEN_HEIGHT + projectile.radius
-                ):
-                    pass
-                # TODO delete if outside the screen
-
+            #
+            # for projectile in self.projectiles:
+            #     projectile.position += projectile.velocity
+            #     if (
+            #         projectile.position[0] < -projectile.radius
+            #         or projectile.position[1] < -projectile.radius
+            #         or projectile.position[0] > SCREEN_WIDTH + projectile.radius
+            #         or projectile.position[1] > SCREEN_HEIGHT + projectile.radius
+            #     ):
+            #         pass
+            #     # TODO delete if outside the screen
+            #
             self.draw()
-            pygame.time.wait(DELAY)
+
+            # physics
+            for i in range(PHYSICS_STEP_PER_FRAME):
+                self.space.step(TIMESTEP)
+
+            # graphics
+            self.clock.tick(FRAMERATE)
+
+            # print(self.clock.get_fps())
+            # pygame.time.wait(DELAY)
 
 
 def main():
