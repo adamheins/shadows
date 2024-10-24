@@ -13,6 +13,8 @@ SCREEN_VERTS = np.array(
     [[0, 0], [SCREEN_WIDTH, 0], [SCREEN_WIDTH, SCREEN_HEIGHT], [0, SCREEN_HEIGHT]]
 )
 
+BACKGROUND_COLOR = (219, 200, 184)
+
 FRAMERATE = 60
 PHYSICS_STEP_PER_TICK = 10
 TIMESTEP = 1.0 / (FRAMERATE * PHYSICS_STEP_PER_TICK)
@@ -145,9 +147,9 @@ class Entity:
     def velocity(self):
         return self.body.velocity
 
-    @velocity.setter
-    def velocity(self, value):
-        self.body.velocity = tuple(value)
+    # @velocity.setter
+    # def velocity(self, value):
+    #     self.body.velocity = tuple(value)
 
     def remove(self):
         space = self.body.space
@@ -171,6 +173,21 @@ class Agent(Entity):
         # pygame.gfxdraw.aacircle(surface, int(self.position[0]), int(self.position[1]),
         #                         int(self.shape.radius), self.shape.color)
         pygame.draw.circle(surface, self.shape.color, self.position, self.shape.radius)
+
+    def move(self, velocity):
+        # x direction
+        if self.position[0] >= SCREEN_WIDTH - self.shape.radius:
+            velocity[0] = min(0, velocity[0])
+        elif self.position[0] <= self.shape.radius:
+            velocity[0] = max(0, velocity[0])
+
+        # y direction
+        if self.position[1] >= SCREEN_HEIGHT - self.shape.radius:
+            velocity[1] = min(0, velocity[1])
+        elif self.position[1] <= self.shape.radius:
+            velocity[1] = max(0, velocity[1])
+
+        self.body.velocity = tuple(velocity)
 
     def tick(self):
         self.shot_cooldown = max(0, self.shot_cooldown - 1)
@@ -213,6 +230,12 @@ class Projectile(Entity):
         )
 
 
+class AgentAction:
+    def __init__(self, velocity, target):
+        self.velocity = velocity
+        self.target = target
+
+
 class Blood:
     def __init__(self, p1, p2):
         self.p1 = p1
@@ -225,7 +248,7 @@ class Game:
 
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         self.clock = pygame.time.Clock()
-        self.screen.fill((255, 255, 255))
+        self.screen.fill(BACKGROUND_COLOR)
         self.screen_rect = self.screen.get_bounding_rect()
         pygame.display.flip()
 
@@ -284,13 +307,10 @@ class Game:
         self.space.add_collision_handler(1, 2).begin = bullet_agent_handler
 
     def draw(self):
-        self.screen.fill((255, 255, 255))
+        self.screen.fill(BACKGROUND_COLOR)
 
         for projectile in self.projectiles.values():
             projectile.draw(self.screen)
-
-        for obstacle in self.obstacles:
-            obstacle.draw(self.screen, viewpoint=self.player.position)
 
         for agent in self.agents.values():
             agent.draw(self.screen)
@@ -298,12 +318,38 @@ class Game:
         for blood in self.bloods:
             pygame.draw.line(self.screen, (255, 0, 0), blood.p1, blood.p2, width=3)
 
+        for obstacle in self.obstacles:
+            obstacle.draw(self.screen, viewpoint=self.player.position)
+
         pygame.display.flip()
 
-    def step(self):
-        # TODO we want to be able to step the sim forward once to facilitate
-        # learning
-        pass
+    def step(self, actions):
+        """Step the game forward in time."""
+        for agent_id, agent in self.agents.items():
+            if agent_id in actions:
+                action = actions[agent_id]
+                agent.move(action.velocity)
+
+                if action.target is not None:
+                    projectile = self.player.shoot(action.target)
+                    if projectile is not None:
+                        self.projectiles[projectile.id] = projectile
+
+        # remove projectiles that are outside of the screen
+        projectiles_to_remove = []
+        for idx, projectile in self.projectiles.items():
+            if not self.screen_rect.collidepoint(projectile.body.position):
+                projectiles_to_remove.append(idx)
+        for idx in projectiles_to_remove:
+            self.projectiles[idx].remove()
+            self.projectiles.pop(idx)
+
+        for agent in self.agents.values():
+            agent.tick()
+
+        # physics
+        for _ in range(PHYSICS_STEP_PER_TICK):
+            self.space.step(TIMESTEP)
 
     def loop(self):
         while True:
@@ -324,11 +370,7 @@ class Game:
 
             # respond to events
             velocity = np.zeros(2)
-            # TODO add remaining checks like this and to the bullet as well
-            if (
-                pygame.K_d in self.keys_down
-                and self.player.position[0] < SCREEN_WIDTH - 10
-            ):
+            if pygame.K_d in self.keys_down:
                 velocity[0] += 1
             if pygame.K_a in self.keys_down:
                 velocity[0] -= 1
@@ -339,33 +381,11 @@ class Game:
             norm = np.linalg.norm(velocity)
             if norm > 0:
                 velocity = PLAYER_VELOCITY * velocity / norm
-            self.player.velocity = tuple(velocity)
 
-            # create a new projectile
-            if target is not None:
-                projectile = self.player.shoot(target)
-                if projectile is not None:
-                    self.projectiles[projectile.id] = projectile
+            actions = {self.player.id: AgentAction(velocity, target)}
 
-            # remove projectiles that are outside of the screen
-            projectiles_to_remove = []
-            for idx, projectile in self.projectiles.items():
-                if not self.screen_rect.collidepoint(projectile.body.position):
-                    projectiles_to_remove.append(idx)
-            for idx in projectiles_to_remove:
-                self.projectiles[idx].remove()
-                self.projectiles.pop(idx)
-
+            self.step(actions)
             self.draw()
-
-            # physics
-            for _ in range(PHYSICS_STEP_PER_TICK):
-                self.space.step(TIMESTEP)
-
-            for agent in self.agents.values():
-                agent.tick()
-
-            # tick forward
             self.clock.tick(FRAMERATE)
 
 
