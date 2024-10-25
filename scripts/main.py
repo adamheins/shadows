@@ -6,13 +6,14 @@ import pymunk
 import pymunk.pygame_util
 
 
-SCREEN_WIDTH = 640
-SCREEN_HEIGHT = 640
+SCREEN_WIDTH = 500
+SCREEN_HEIGHT = 500
 SCREEN_VERTS = np.array(
     [[0, 0], [SCREEN_WIDTH, 0], [SCREEN_WIDTH, SCREEN_HEIGHT], [0, SCREEN_HEIGHT]]
 )
 
 BACKGROUND_COLOR = (219, 200, 184)
+OBSTACLE_COLOR = (0, 0, 0)
 
 FRAMERATE = 60
 PHYSICS_STEP_PER_TICK = 10
@@ -106,12 +107,12 @@ def line_screen_edge_intersection(p, v):
 
 
 class Obstacle:
-    def __init__(self, space, x, y, w, h, color):
+    def __init__(self, space, x, y, w, h):
         self.x = x
         self.y = y
         self.w = w
         self.h = h
-        self.color = color
+        self.color = OBSTACLE_COLOR
         self.rect = pygame.Rect(x, y, w, h)
 
         # vertices of the box
@@ -164,13 +165,13 @@ class Obstacle:
 
         return [right, extra_right] + screen_vs + [extra_left, left]
 
-    def draw(self, surface, viewpoint=None):
-        if viewpoint is not None:
-            ps = self._compute_occlusion(viewpoint)
-            pygame.gfxdraw.aapolygon(surface, ps, (100, 100, 100))
-            pygame.gfxdraw.filled_polygon(surface, ps, (100, 100, 100))
-
+    def draw(self, surface):
         pygame.draw.rect(surface, self.color, self.rect)
+
+    def draw_occlusion(self, surface, viewpoint):
+        ps = self._compute_occlusion(viewpoint)
+        pygame.gfxdraw.aapolygon(surface, ps, (100, 100, 100))
+        pygame.gfxdraw.filled_polygon(surface, ps, (100, 100, 100))
 
 
 class Entity:
@@ -352,8 +353,13 @@ class Game:
         self.projectiles = {}
 
         self.obstacles = [
-            Obstacle(self.space, 300, 300, 100, 100, color=(0, 0, 0)),
-            Obstacle(self.space, 500, 300, 100, 20, color=(0, 0, 0)),
+            Obstacle(self.space, 80, 80, 80, 80),
+            Obstacle(self.space, 0, 230, 160, 40),
+            Obstacle(self.space, 80, 340, 80, 80),
+            Obstacle(self.space, 250, 80, 40, 220),
+            Obstacle(self.space, 290, 80, 100, 40),
+            Obstacle(self.space, 390, 260, 110, 40),
+            Obstacle(self.space, 250, 380, 200, 40),
         ]
 
         self.player = Agent(
@@ -408,9 +414,9 @@ class Game:
     def draw(self):
         self.screen.fill(BACKGROUND_COLOR)
 
-        for blood in self.bloods:
-            # pygame.draw.line(self.screen, (255, 0, 0), blood.p1, blood.p2, width=3)
-            pygame.draw.circle(self.screen, (255, 0, 0), blood.p1, 2)
+        # for blood in self.bloods:
+        #     # pygame.draw.line(self.screen, (255, 0, 0), blood.p1, blood.p2, width=3)
+        #     pygame.draw.circle(self.screen, (255, 0, 0), blood.p1, 2)
 
         for projectile in self.projectiles.values():
             projectile.draw(self.screen)
@@ -419,7 +425,10 @@ class Game:
             agent.draw(self.screen)
 
         for obstacle in self.obstacles:
-            obstacle.draw(self.screen, viewpoint=self.player.position)
+            obstacle.draw_occlusion(self.screen, viewpoint=self.player.position)
+
+        for obstacle in self.obstacles:
+            obstacle.draw(self.screen)
 
         # text
         if self.player.reload_ticks > 0:
