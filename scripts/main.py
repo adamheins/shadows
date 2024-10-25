@@ -25,8 +25,42 @@ PLAYER_MASS = 10
 BULLET_MASS = 0.1
 
 CLIP_SIZE = 20  # bullets per reload
-SHOT_COOLDOWN_TICKS = 10
+SHOT_COOLDOWN_TICKS = 1
 RELOAD_TICKS = 2 * FRAMERATE
+
+
+class Text:
+    """Text label."""
+
+    def __init__(self, text, font, position, color):
+        self.text = text
+        self.font = font
+        self.color = color
+        self.position = position
+
+        self.update()
+
+    def update(self, text=None, position=None, color=None):
+        """Update the text label."""
+        if text is not None:
+            self.text = text
+        if color is not None:
+            self.color = color
+        if position is not None:
+            self.position = position
+        self.image = self.font.render(self.text, True, self.color)
+
+    @property
+    def shape(self):
+        return (self.image.get_width(), self.image.get_height())
+
+    @property
+    def rect(self):
+        return self.image.get_rect()
+
+    def draw(self, surface):
+        """Draw the text on the surface."""
+        surface.blit(self.image, self.position)
 
 
 def orth(v):
@@ -242,7 +276,6 @@ class Agent(Entity):
             self.shot_cooldown = SHOT_COOLDOWN_TICKS
             self.ammo -= 1
             if self.ammo == 0:
-                print("reloading!")
                 self.reload()
             self.target_velocity -= 0.5 * PLAYER_VELOCITY * direction
             return Projectile(
@@ -291,6 +324,22 @@ class Blood:
 class Game:
     def __init__(self):
         self.space = pymunk.Space()
+
+        self.font = pygame.font.SysFont(None, 28)
+        self.ammo_text = Text(
+            text=f"Ammo: {CLIP_SIZE}",
+            font=self.font,
+            position=(20, SCREEN_HEIGHT - 60),
+            color=(0, 0, 0),
+        )
+        self.health_text = Text(
+            text="Health: 5",
+            font=self.font,
+            position=(20, SCREEN_HEIGHT - 30),
+            color=(0, 0, 0),
+        )
+
+        self.texts = [self.ammo_text, self.health_text]
 
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         self.clock = pygame.time.Clock()
@@ -372,6 +421,20 @@ class Game:
         for obstacle in self.obstacles:
             obstacle.draw(self.screen, viewpoint=self.player.position)
 
+        # text
+        if self.player.reload_ticks > 0:
+            self.ammo_text.update(text=f"Reloading...", color=(255, 0, 0))
+        else:
+            self.ammo_text.update(text=f"Ammo: {self.player.ammo}", color=(0, 0, 0))
+
+        if self.player.health > 2:
+            self.health_text.update(text=f"Health: {self.player.health}")
+        else:
+            self.health_text.update(text=f"Health: {self.player.health}", color=(255, 0, 0))
+
+        for text in self.texts:
+            text.draw(self.screen)
+
         pygame.display.flip()
 
     def step(self, actions):
@@ -436,8 +499,11 @@ class Game:
             if norm > 0:
                 velocity = PLAYER_VELOCITY * velocity / norm
 
+            # TODO I guess reload can be dumped into the action as well
+            # TODO I wonder if the action should just be the command ("go
+            # left") rather than the actual velocity vector (the latter has
+            # more DOFs than are actually available)
             if reload:
-                print("reloading")
                 self.player.reload()
 
             actions = {self.player.id: AgentAction(velocity, target)}

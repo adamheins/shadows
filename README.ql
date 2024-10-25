@@ -23,3 +23,8 @@
 = Technical details =
 * It would be nice to have a Python interface for learning but then also a
   Javascript interface for easy deployment in the browser
+
+= Learning =
+* Action space: directions of motion, reload?, target
+* Observation space: position of all agents? but also need to encode
+  obstacles... this may require learning from pixels directly!
