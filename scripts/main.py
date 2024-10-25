@@ -8,7 +8,6 @@ import pymunk.pygame_util
 
 SCREEN_WIDTH = 640
 SCREEN_HEIGHT = 640
-DIAG = np.sqrt(SCREEN_WIDTH**2 + SCREEN_HEIGHT**2)
 SCREEN_VERTS = np.array(
     [[0, 0], [SCREEN_WIDTH, 0], [SCREEN_WIDTH, SCREEN_HEIGHT], [0, SCREEN_HEIGHT]]
 )
@@ -25,8 +24,9 @@ BULLET_VELOCITY = 1000
 PLAYER_MASS = 10
 BULLET_MASS = 0.1
 
-# TODO shouldn't this be mapped to real time?
+CLIP_SIZE = 20  # bullets per reload
 SHOT_COOLDOWN_TICKS = 10
+RELOAD_TICKS = 2 * FRAMERATE
 
 
 def orth(v):
@@ -40,6 +40,18 @@ def unit(v):
     if np.isclose(norm, 0):
         return np.zeros_like(v)
     return v / norm
+
+
+# TODO need some collision functions to get rid of pymunk
+def point_segment_dist(p, s1, s2):
+    # parallel
+    if np.isclose(orth(v1) @ v2, 0):
+        return None
+
+    A = np.array([[-v1 @ v1, v1 @ v2], [-v1 @ v2, v2 @ v2]])
+    b = np.array([v1 @ (p1 - p2), v2 @ (p1 - p2)])
+    t = np.linalg.solve(A, b)
+    return p1 + t[0] * v1, ts
 
 
 def line_screen_edge_intersection(p, v):
@@ -147,10 +159,6 @@ class Entity:
     def velocity(self):
         return self.body.velocity
 
-    # @velocity.setter
-    # def velocity(self, value):
-    #     self.body.velocity = tuple(value)
-
     def remove(self):
         space = self.body.space
         space.remove(self.shape, self.body)
@@ -167,12 +175,27 @@ class Agent(Entity):
 
         super().__init__(space, body, shape)
 
+        self.health = 5
+        self.ammo = CLIP_SIZE
         self.shot_cooldown = 0
+        self.reload_ticks = 0
+        self.target_velocity = np.zeros(2)
 
     def draw(self, surface):
-        # pygame.gfxdraw.aacircle(surface, int(self.position[0]), int(self.position[1]),
-        #                         int(self.shape.radius), self.shape.color)
-        pygame.draw.circle(surface, self.shape.color, self.position, self.shape.radius)
+        pygame.gfxdraw.aacircle(
+            surface,
+            int(self.position[0]),
+            int(self.position[1]),
+            int(self.shape.radius),
+            self.shape.color,
+        )
+        pygame.gfxdraw.filled_circle(
+            surface,
+            int(self.position[0]),
+            int(self.position[1]),
+            int(self.shape.radius),
+            self.shape.color,
+        )
 
     def move(self, velocity):
         # x direction
@@ -187,25 +210,48 @@ class Agent(Entity):
         elif self.position[1] <= self.shape.radius:
             velocity[1] = max(0, velocity[1])
 
-        self.body.velocity = tuple(velocity)
+        # print(self.velocity_disturbance)
+        # self.body.velocity = tuple(velocity + self.velocity_disturbance)
+        self.target_velocity += velocity
+        # self.body.apply_impulse_at_local_point(tuple(100 * velocity))
+        # if np.linalg.norm(self.body.velocity) > PLAYER_VELOCITY:
+        #     self.body.velocity = tuple(PLAYER_VELOCITY * unit(self.body.velocity))
 
     def tick(self):
         self.shot_cooldown = max(0, self.shot_cooldown - 1)
 
+        # if done reloading, fill clip
+        if self.reload_ticks == 1:
+            self.ammo = CLIP_SIZE
+        self.reload_ticks = max(0, self.reload_ticks - 1)
+
+        # TODO this is where I should do the checks
+        self.body.velocity = tuple(self.target_velocity)
+        self.target_velocity = np.zeros(2)
+
+    def reload(self):
+        self.reload_ticks = RELOAD_TICKS
+
     def shoot(self, target):
-        if self.shot_cooldown > 0:
+        if self.shot_cooldown > 0 or self.reload_ticks > 0:
             return None
 
         norm = np.linalg.norm(target - self.position)
         if norm > 0:
             direction = (target - self.position) / norm
             self.shot_cooldown = SHOT_COOLDOWN_TICKS
+            self.ammo -= 1
+            if self.ammo == 0:
+                print("reloading!")
+                self.reload()
+            self.target_velocity -= 0.5 * PLAYER_VELOCITY * direction
             return Projectile(
                 space=self.body.space,
                 position=self.position,
                 velocity=BULLET_VELOCITY * direction,
                 agent_id=self.id,
             )
+            # self.body.apply_impulse_at_local_point(-100 * direction)
         else:
             return None
 
@@ -290,16 +336,20 @@ class Game:
             if bullet.agent_id == agent_id:
                 return False
 
-            if agent_id == self.player.body.id:
-                print("you lose!")
-            else:
-                agent = self.agents[agent_id]
+            agent = self.agents[agent_id]
+            agent.health -= 1
+            if agent.health <= 0:
+                print("dead!")
                 agent.remove()
                 self.agents.pop(agent_id)
 
-                start = arbiter.contact_point_set.points[0].point_a
-                blood = Blood(start, start + 20 * unit(bullet.velocity))
-                self.bloods.append(blood)
+            start = arbiter.contact_point_set.points[0].point_a
+            blood = Blood(start + 25 * unit(bullet.velocity), (0, 0))
+            self.bloods.append(blood)
+            agent.target_velocity += 0.5 * PLAYER_VELOCITY * unit(bullet.velocity)
+
+            bullet.remove()
+            self.projectiles.pop(bullet_id)
 
             return False
 
@@ -309,14 +359,15 @@ class Game:
     def draw(self):
         self.screen.fill(BACKGROUND_COLOR)
 
+        for blood in self.bloods:
+            # pygame.draw.line(self.screen, (255, 0, 0), blood.p1, blood.p2, width=3)
+            pygame.draw.circle(self.screen, (255, 0, 0), blood.p1, 2)
+
         for projectile in self.projectiles.values():
             projectile.draw(self.screen)
 
         for agent in self.agents.values():
             agent.draw(self.screen)
-
-        for blood in self.bloods:
-            pygame.draw.line(self.screen, (255, 0, 0), blood.p1, blood.p2, width=3)
 
         for obstacle in self.obstacles:
             obstacle.draw(self.screen, viewpoint=self.player.position)
@@ -328,12 +379,13 @@ class Game:
         for agent_id, agent in self.agents.items():
             if agent_id in actions:
                 action = actions[agent_id]
-                agent.move(action.velocity)
 
                 if action.target is not None:
                     projectile = self.player.shoot(action.target)
                     if projectile is not None:
                         self.projectiles[projectile.id] = projectile
+
+                agent.move(action.velocity)
 
         # remove projectiles that are outside of the screen
         projectiles_to_remove = []
@@ -355,6 +407,7 @@ class Game:
         while True:
 
             target = None
+            reload = False
 
             # process events
             for event in pygame.event.get():
@@ -365,6 +418,7 @@ class Game:
                     self.keys_down.add(event.key)
                 elif event.type == pygame.KEYUP:
                     self.keys_down.discard(event.key)
+                    reload = event.key == pygame.K_r
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     target = np.array(pygame.mouse.get_pos())
 
@@ -381,6 +435,10 @@ class Game:
             norm = np.linalg.norm(velocity)
             if norm > 0:
                 velocity = PLAYER_VELOCITY * velocity / norm
+
+            if reload:
+                print("reloading")
+                self.player.reload()
 
             actions = {self.player.id: AgentAction(velocity, target)}
 
