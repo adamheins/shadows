@@ -26,6 +26,10 @@ class AARect:
         self.vertices = np.array([[x, y], [x, y + h], [x + w, y + h], [x + w, y]])
         self.normals = np.array([[-1, 0], [0, 1], [1, 0], [0, -1]])
 
+        self.segments = [
+            Segment(self.vertices[i - 1], self.vertices[i]) for i in range(4)
+        ]
+
 
 class Segment:
     """Line segment."""
@@ -36,6 +40,12 @@ class Segment:
 
         self.v = self.s2 - self.s1
         self.normal = unit(orth(self.v))
+
+
+class Circle:
+    def __init__(self, c, r):
+        self.c = c
+        self.r = r
 
 
 def point_in_rect(point, rect):
@@ -55,6 +65,31 @@ def point_segment_dist(point, segment):
     d1 = np.linalg.norm(point - segment.s1)
     d2 = np.linalg.norm(point - segment.s2)
     return min(d1, d2)
+
+
+def circle_segment_intersect(circle, segment):
+    """True if circle and line segment intersect, False otherwise."""
+    return point_segment_dist(circle.c, segment) <= circle.r
+
+
+def _quad_formula(a, b, c):
+    d = np.sqrt(b**2 - 4 * a * c)
+    return (-b - d) / (2 * a), (-b + d) / (2 * a)
+
+
+def circle_segment_intersect_dist(circle, segment):
+    # the segment starts in the circle already
+    if np.linalg.norm(segment.s1 - circle.c) <= circle.r:
+        return 0
+
+    q = segment.s1 - circle.c
+    v = segment.v
+
+    a = v @ v
+    b = 2 * q @ v
+    c = q @ q - circle.r**2
+    ts = _quad_formula(a, b, c)
+    return np.min(ts)
 
 
 def segment_segment_dist(segment1, segment2):
@@ -102,6 +137,27 @@ def segment_segment_dist(segment1, segment2):
     return np.min([np.linalg.norm(delta) for delta in deltas])
 
 
+def segment_segment_intersect_dist(segment1, segment2):
+    # parallel
+    if np.isclose(segment1.normal @ segment2.v, 0):
+        return None
+
+    v1 = segment1.v
+    v2 = segment2.v
+    d = segment1.s1 - segment2.s1
+
+    # determine the intersection point for the infinite lines
+    A = np.array([[-v1 @ v1, v1 @ v2], [-v1 @ v2, v2 @ v2]])
+    b = np.array([v1 @ d, v2 @ d])
+    t = np.linalg.solve(A, b)
+
+    c1 = 0 <= t[0] <= 1
+    c2 = 0 <= t[1] <= 1
+    if c1 and c2:
+        return t[0]
+    return None
+
+
 def segment_rect_intersect(segment, rect):
     """True if segment and rectangle are intersecting, False otherwise."""
     # look for separating axis
@@ -112,3 +168,14 @@ def segment_rect_intersect(segment, rect):
         if np.max(s) < np.min(r) or np.min(s) > np.max(r):
             return False
     return True
+
+
+def segment_rect_intersect_dist(segment, rect):
+    if point_in_rect(segment.s1, rect):
+        return 0
+    min_dist = np.inf
+    for seg in rect.segments:
+        d = segment_segment_intersect_dist(segment, seg)
+        if d is not None:
+            min_dist = min(d, min_dist)
+    return min_dist

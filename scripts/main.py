@@ -83,30 +83,26 @@ def line_screen_edge_intersection(p, v):
     return p + t * v
 
 
-class Obstacle:
+class Obstacle(AARect):
     def __init__(self, space, x, y, w, h):
-        self.x = x
-        self.y = y
-        self.w = w
-        self.h = h
+        super().__init__(x, y, w, h)
         self.color = OBSTACLE_COLOR
         self.rect = pygame.Rect(x, y, w, h)
 
-        # vertices of the box
-        self.verts = np.array([[x, y], [x + w, y], [x + w, y + h], [x, y + h]])
-
-        self.shape = pymunk.Poly(body=space.static_body, vertices=self.verts.tolist())
+        self.shape = pymunk.Poly(
+            body=space.static_body, vertices=self.vertices.tolist()
+        )
         self.shape.collision_type = 0
         space.add(self.shape)
 
     def _compute_witness_vertices(self, point, tol=1e-3):
         right = None
         left = None
-        for i in range(len(self.verts)):
-            vert = self.verts[i]
+        for i in range(len(self.vertices)):
+            vert = self.vertices[i]
             delta = vert - point
             normal = orth(delta)
-            dists = (self.verts - point) @ normal
+            dists = (self.vertices - point) @ normal
             if np.all(dists >= -tol):
                 right = vert
             elif np.all(dists <= tol):
@@ -142,6 +138,7 @@ class Obstacle:
 
         return [right, extra_right] + screen_vs + [extra_left, left]
 
+    # TODO move to collision code
     def compute_collision_normal(self, point, r):
         if point[0] >= self.x and point[0] <= self.x + self.w:
             if point[1] >= self.y - r and point[1] <= self.y + 0.5 * self.h:
@@ -154,10 +151,10 @@ class Obstacle:
             elif point[0] <= self.x + self.w + r and point[0] > self.x + 0.5 * self.w:
                 return (1, 0)
         else:
-            v2 = np.sum((self.verts - point) ** 2, axis=1)
+            v2 = np.sum((self.vertices - point) ** 2, axis=1)
             idx = np.argmin(v2)
             if v2[idx] <= r**2:
-                return unit(point - self.verts[idx, :])
+                return unit(point - self.vertices[idx, :])
         return None
 
     def draw(self, surface):
@@ -369,9 +366,9 @@ class Game:
 
         def bullet_obstacle_handler(arbiter, space, data):
             # delete bullet when it hits an obstacle
-            body_id = arbiter.shapes[1].body.id
-            self.projectiles[body_id].remove()
-            self.projectiles.pop(body_id)
+            # body_id = arbiter.shapes[1].body.id
+            # self.projectiles[body_id].remove()
+            # self.projectiles.pop(body_id)
             return False
 
         def bullet_agent_handler(arbiter, space, data):
@@ -464,18 +461,28 @@ class Game:
                 agent.move(action.velocity)
 
         # process projectiles
-        projectiles_to_remove = []
-        agents_to_remove = []
+        projectiles_to_remove = set()
+        agents_to_remove = set()
         for idx, projectile in self.projectiles.items():
             # projectile has left the screen
             if not self.screen_rect.collidepoint(projectile.body.position):
-                projectiles_to_remove.append(idx)
+                projectiles_to_remove.add(idx)
                 continue
 
-            # check for collision with an agent
+            # path of projectile's motion over the timestep
             s1 = projectile.position
             s2 = s1 + TIMESTEP * PHYSICS_STEP_PER_TICK * projectile.velocity
             segment = Segment(s1, s2)
+
+            # check for collisions with obstacles
+            obs_dist = np.inf
+            for obstacle in self.obstacles:
+                if segment_rect_intersect(segment, obstacle):
+                    d = segment_rect_intersect_dist(segment, obstacle)
+                    obs_dist = min(obs_dist, d)
+                    projectiles_to_remove.add(idx)
+
+            # check for collision with an agent
             for agent_id, agent in self.agents.items():
 
                 # agent cannot be hit by its own bullets
@@ -484,15 +491,23 @@ class Game:
 
                 # check for collision with the bullet's path
                 # TODO segment_segment_dist might be better here
-                if point_segment_dist(agent.position, segment) < agent.shape.radius:
-                    projectiles_to_remove.append(idx)
+                # if point_segment_dist(agent.position, segment) < agent.shape.radius:
+                circle = Circle(agent.position, agent.shape.radius)
+                if circle_segment_intersect(circle, segment):
+                    # if the projectile hit an obstacle first, then the agent
+                    # is fine
+                    d = circle_segment_intersect_dist(circle, segment)
+                    if d > obs_dist:
+                        continue
+
+                    projectiles_to_remove.add(idx)
 
                     agent.target_velocity += (
                         0.5 * PLAYER_VELOCITY * unit(projectile.velocity)
                     )
                     agent.health -= 1
                     if agent.health <= 0:
-                        agents_to_remove.append(agent_id)
+                        agents_to_remove.add(agent_id)
 
         for idx in projectiles_to_remove:
             self.projectiles[idx].remove()
