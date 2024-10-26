@@ -1,0 +1,114 @@
+import numpy as np
+
+
+def unit(v):
+    """Normalize to a unit vector."""
+    norm = np.linalg.norm(v)
+    if np.isclose(norm, 0):
+        return np.zeros_like(v)
+    return v / norm
+
+
+def orth(v):
+    """Generate a 2D orthogonal to v."""
+    return np.array([v[1], -v[0]])
+
+
+class AARect:
+    """Axis-aligned rectangle."""
+
+    def __init__(self, x, y, w, h):
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+
+        self.vertices = np.array([[x, y], [x, y + h], [x + w, y + h], [x + w, y]])
+        self.normals = np.array([[-1, 0], [0, 1], [1, 0], [0, -1]])
+
+
+class Segment:
+    """Line segment."""
+
+    def __init__(self, s1, s2):
+        self.s1 = np.array(s1)
+        self.s2 = np.array(s2)
+
+        self.v = self.s2 - self.s1
+        self.normal = unit(orth(self.v))
+
+
+def point_in_rect(point, rect):
+    """True if the rectangle contains the point, False otherwise."""
+    x, y = point
+    return x >= rect.x and x <= rect.x + rect.w and y >= rect.y and y <= rect.y + rect.h
+
+
+def point_segment_dist(point, segment):
+    """Distance between a point and a line segment."""
+    q = np.array(segment.s1 - point)
+
+    t = -(q @ segment.v) / (segment.v @ segment.v)
+    if t >= 0 and t <= 1:
+        r = segment.s1 + t * segment.v
+        return np.linalg.norm(point - r)
+    d1 = np.linalg.norm(point - segment.s1)
+    d2 = np.linalg.norm(point - segment.s2)
+    return min(d1, d2)
+
+
+def segment_segment_dist(segment1, segment2):
+    """Distance between two line segments."""
+    # segments are parallel
+    if np.isclose(segment1.normal @ segment2.v, 0):
+        return np.abs(segment1.normal @ (segment2.s1 - segment1.s1))
+
+    v1 = segment1.v
+    v2 = segment2.v
+    d = segment1.s1 - segment2.s1
+
+    # determine the intersection point for the infinite lines
+    A = np.array([[-v1 @ v1, v1 @ v2], [-v1 @ v2, v2 @ v2]])
+    b = np.array([v1 @ d, v2 @ d])
+    t = np.linalg.solve(A, b)
+
+    c1 = 0 <= t[0] <= 1
+    c2 = 0 <= t[1] <= 1
+
+    # line segments actually intersect
+    if c1 and c2:
+        return 0
+
+    # intersection is outside segment2 but not segment1: closest point must be
+    # an endpoint of segment2
+    elif c1 and not c2:
+        if t[1] > 1:
+            return point_segment_dist(segment2.s2, segment1)
+        return point_segment_dist(segment2.s1, segment1)
+
+    # opposite of above
+    elif c2 and not c1:
+        if t[0] > 1:
+            return point_segment_dist(segment1.s2, segment2)
+        return point_segment_dist(segment1.s1, segment2)
+
+    # otherwise the closest distance is between a pair of endpoints
+    deltas = [
+        segment1.s1 - segment2.s1,
+        segment1.s1 - segment2.s2,
+        segment1.s2 - segment2.s1,
+        segment1.s2 - segment2.s2,
+    ]
+    return np.min([np.linalg.norm(delta) for delta in deltas])
+
+
+def segment_rect_intersect(segment, rect):
+    """True if segment and rectangle are intersecting, False otherwise."""
+    # look for separating axis
+    normals = np.vstack((rect.normals, segment.normal))
+    for normal in normals:
+        s = [normal @ segment.s1, normal @ segment.s2]
+        r = rect.vertices @ normal
+        if np.max(s) < np.min(r) or np.min(s) > np.max(r):
+            return False
+    return True
