@@ -2,8 +2,6 @@
 import pygame
 import pygame.gfxdraw
 import numpy as np
-import pymunk
-import pymunk.pygame_util
 
 from shoot import *
 
@@ -18,8 +16,7 @@ BACKGROUND_COLOR = (219, 200, 184)
 OBSTACLE_COLOR = (0, 0, 0)
 
 FRAMERATE = 60
-PHYSICS_STEP_PER_TICK = 10
-TIMESTEP = 1.0 / (FRAMERATE * PHYSICS_STEP_PER_TICK)
+TIMESTEP = 1.0 / FRAMERATE
 
 PLAYER_VELOCITY = 200  # px per second
 BULLET_VELOCITY = 1000
@@ -30,40 +27,6 @@ BULLET_MASS = 0.1
 CLIP_SIZE = 20  # bullets per reload
 SHOT_COOLDOWN_TICKS = 1
 RELOAD_TICKS = 2 * FRAMERATE
-
-
-class Text:
-    """Text label."""
-
-    def __init__(self, text, font, position, color):
-        self.text = text
-        self.font = font
-        self.color = color
-        self.position = position
-
-        self.update()
-
-    def update(self, text=None, position=None, color=None):
-        """Update the text label."""
-        if text is not None:
-            self.text = text
-        if color is not None:
-            self.color = color
-        if position is not None:
-            self.position = position
-        self.image = self.font.render(self.text, True, self.color)
-
-    @property
-    def shape(self):
-        return (self.image.get_width(), self.image.get_height())
-
-    @property
-    def rect(self):
-        return self.image.get_rect()
-
-    def draw(self, surface):
-        """Draw the text on the surface."""
-        surface.blit(self.image, self.position)
 
 
 def line_screen_edge_intersection(p, v):
@@ -84,16 +47,10 @@ def line_screen_edge_intersection(p, v):
 
 
 class Obstacle(AARect):
-    def __init__(self, space, x, y, w, h):
+    def __init__(self, x, y, w, h):
         super().__init__(x, y, w, h)
         self.color = OBSTACLE_COLOR
         self.rect = pygame.Rect(x, y, w, h)
-
-        self.shape = pymunk.Poly(
-            body=space.static_body, vertices=self.vertices.tolist()
-        )
-        self.shape.collision_type = 0
-        space.add(self.shape)
 
     def _compute_witness_vertices(self, point, tol=1e-3):
         right = None
@@ -169,65 +126,48 @@ class Obstacle(AARect):
 class Entity:
     """Pymunk entity."""
 
-    def __init__(self, space, body, shape):
-        self.body = body
-        self.shape = shape
-        space.add(body, shape)
+    _current_id = 0
 
-    @property
-    def id(self):
-        return self.body.id
+    def __init__(self, position, velocity):
+        self.position = position
+        self.velocity = velocity
 
-    @property
-    def position(self):
-        return self.body.position
-
-    @property
-    def velocity(self):
-        return self.body.velocity
-
-    def remove(self):
-        space = self.body.space
-        space.remove(self.shape, self.body)
+        self.id = Entity._current_id
+        Entity._current_id += 1
 
 
 class Agent(Entity):
-    def __init__(self, space, position, color):
-        body = pymunk.Body(PLAYER_MASS, float("inf"))
-        body.position = position
+    def __init__(self, position, color):
+        super().__init__(position, np.zeros(2))
 
-        shape = pymunk.Circle(body, 10, (0, 0))
-        shape.color = color
-        shape.collision_type = 1
-
-        super().__init__(space, body, shape)
+        self.color = color
+        self.radius = 10
 
         self.health = 5
         self.ammo = CLIP_SIZE
         self.shot_cooldown = 0
         self.reload_ticks = 0
-        self.target_velocity = np.zeros(2)
 
     def draw(self, surface):
         pygame.gfxdraw.aacircle(
             surface,
             int(self.position[0]),
             int(self.position[1]),
-            int(self.shape.radius),
-            self.shape.color,
+            int(self.radius),
+            self.color,
         )
         pygame.gfxdraw.filled_circle(
             surface,
             int(self.position[0]),
             int(self.position[1]),
-            int(self.shape.radius),
-            self.shape.color,
+            int(self.radius),
+            self.color,
         )
 
     def move(self, velocity):
-        self.target_velocity += velocity
+        self.velocity += velocity
 
-    def tick(self, obstacles):
+    def step(self, dt, obstacles):
         self.shot_cooldown = max(0, self.shot_cooldown - 1)
 
         # if done reloading, fill clip
@@ -235,27 +175,27 @@ class Agent(Entity):
             self.ammo = CLIP_SIZE
         self.reload_ticks = max(0, self.reload_ticks - 1)
 
-        v = self.target_velocity
+        v = self.velocity
 
         # don't leave the screen
-        if self.position[0] >= SCREEN_WIDTH - self.shape.radius:
+        if self.position[0] >= SCREEN_WIDTH - self.radius:
             v[0] = min(0, v[0])
-        elif self.position[0] <= self.shape.radius:
+        elif self.position[0] <= self.radius:
             v[0] = max(0, v[0])
-        if self.position[1] >= SCREEN_HEIGHT - self.shape.radius:
+        if self.position[1] >= SCREEN_HEIGHT - self.radius:
             v[1] = min(0, v[1])
-        elif self.position[1] <= self.shape.radius:
+        elif self.position[1] <= self.radius:
             v[1] = max(0, v[1])
 
         # don't walk into an obstacle
         for obstacle in obstacles:
-            n = obstacle.compute_collision_normal(self.position, self.shape.radius)
+            n = obstacle.compute_collision_normal(self.position, self.radius)
             if n is not None and n @ v < 0:
                 t = orth(n)
                 v = (t @ v) * t
-        self.body.velocity = tuple(v)
 
-        self.target_velocity = np.zeros(2)
+        self.position += dt * v
+        self.velocity = np.zeros(2)
 
     def reload(self):
         self.reload_ticks = RELOAD_TICKS
@@ -271,35 +211,34 @@ class Agent(Entity):
             self.ammo -= 1
             if self.ammo == 0:
                 self.reload()
-            self.target_velocity -= 0.5 * PLAYER_VELOCITY * direction
+            self.velocity -= 0.5 * PLAYER_VELOCITY * direction
             return Projectile(
-                space=self.body.space,
-                position=self.position,
+                position=self.position.copy(),
                 velocity=BULLET_VELOCITY * direction,
                 agent_id=self.id,
             )
         else:
             return None
 
+    def circle(self):
+        return Circle(self.position, self.radius)
+
 
 class Projectile(Entity):
-    def __init__(self, space, position, velocity, agent_id):
+    def __init__(self, position, velocity, agent_id):
+        super().__init__(position, velocity)
         self.agent_id = agent_id
-
-        body = pymunk.Body(BULLET_MASS, float("inf"))
-        body.position = tuple(position)
-        body.velocity = tuple(velocity)
-
-        shape = pymunk.Circle(body, 3, (0, 0))
-        shape.color = (0, 0, 0, 255)
-        shape.collision_type = 2
-
-        super().__init__(space, body, shape)
+        self.color = (0, 0, 0, 255)
+        self.radius = 3
 
     def draw(self, surface):
-        pygame.draw.circle(
-            surface, self.shape.color, self.body.position, self.shape.radius
-        )
+        pygame.draw.circle(surface, self.color, self.position, self.radius)
+
+    def path(self, dt):
+        return Segment(self.position, self.position + dt * self.velocity)
+
+    def step(self, dt):
+        self.position += dt * self.velocity
 
 
 class AgentAction:
@@ -308,16 +247,8 @@ class AgentAction:
         self.target = target
 
 
-class Blood:
-    def __init__(self, p1, p2):
-        self.p1 = p1
-        self.p2 = p2
-
-
 class Game:
     def __init__(self):
-        self.space = pymunk.Space()
-
         self.font = pygame.font.SysFont(None, 28)
         self.ammo_text = Text(
             text=f"Ammo: {CLIP_SIZE}",
@@ -345,72 +276,23 @@ class Game:
         self.projectiles = {}
 
         self.obstacles = [
-            Obstacle(self.space, 80, 80, 80, 80),
-            Obstacle(self.space, 0, 230, 160, 40),
-            Obstacle(self.space, 80, 340, 80, 80),
-            Obstacle(self.space, 250, 80, 40, 220),
-            Obstacle(self.space, 290, 80, 100, 40),
-            Obstacle(self.space, 390, 260, 110, 40),
-            Obstacle(self.space, 250, 380, 200, 40),
+            Obstacle(80, 80, 80, 80),
+            Obstacle(0, 230, 160, 40),
+            Obstacle(80, 340, 80, 80),
+            Obstacle(250, 80, 40, 220),
+            Obstacle(290, 80, 100, 40),
+            Obstacle(390, 260, 110, 40),
+            Obstacle(250, 380, 200, 40),
         ]
 
-        self.player = Agent(
-            space=self.space, position=[200, 200], color=(255, 0, 0, 255)
-        )
-        enemies = [Agent(space=self.space, position=[200, 300], color=(0, 0, 255, 255))]
+        self.player = Agent(position=[200, 200], color=(255, 0, 0, 255))
+        enemies = [Agent(position=[200, 300], color=(0, 0, 255, 255))]
 
-        self.agents = {enemy.body.id: enemy for enemy in enemies}
-        self.agents[self.player.body.id] = self.player
-
-        self.bloods = []
-
-        def bullet_obstacle_handler(arbiter, space, data):
-            # delete bullet when it hits an obstacle
-            # body_id = arbiter.shapes[1].body.id
-            # self.projectiles[body_id].remove()
-            # self.projectiles.pop(body_id)
-            return False
-
-        def bullet_agent_handler(arbiter, space, data):
-            # bullet_id = arbiter.shapes[1].body.id
-            # agent_id = arbiter.shapes[0].body.id
-            #
-            # bullet = self.projectiles[bullet_id]
-            #
-            # # an agent cannot be hit by its own bullet
-            # if bullet.agent_id == agent_id:
-            #     return False
-            #
-            # agent = self.agents[agent_id]
-            # agent.health -= 1
-            # if agent.health <= 0:
-            #     print("dead!")
-            #     agent.remove()
-            #     self.agents.pop(agent_id)
-            #
-            # start = arbiter.contact_point_set.points[0].point_a
-            # blood = Blood(start + 25 * unit(bullet.velocity), (0, 0))
-            # self.bloods.append(blood)
-            # agent.target_velocity += 0.5 * PLAYER_VELOCITY * unit(bullet.velocity)
-            #
-            # bullet.remove()
-            # self.projectiles.pop(bullet_id)
-
-            return False
-
-        def obstacle_agent_handler(arbiter, space, data):
-            return False
-
-        self.space.add_collision_handler(0, 2).begin = bullet_obstacle_handler
-        self.space.add_collision_handler(1, 2).begin = bullet_agent_handler
-        self.space.add_collision_handler(0, 1).begin = obstacle_agent_handler
+        self.agents = {enemy.id: enemy for enemy in enemies}
+        self.agents[self.player.id] = self.player
 
     def draw(self):
         self.screen.fill(BACKGROUND_COLOR)
-
-        # for blood in self.bloods:
-        #     # pygame.draw.line(self.screen, (255, 0, 0), blood.p1, blood.p2, width=3)
-        #     pygame.draw.circle(self.screen, (255, 0, 0), blood.p1, 2)
 
         for projectile in self.projectiles.values():
             projectile.draw(self.screen)
@@ -465,14 +347,12 @@ class Game:
         agents_to_remove = set()
         for idx, projectile in self.projectiles.items():
             # projectile has left the screen
-            if not self.screen_rect.collidepoint(projectile.body.position):
+            if not self.screen_rect.collidepoint(projectile.position):
                 projectiles_to_remove.add(idx)
                 continue
 
             # path of projectile's motion over the timestep
-            s1 = projectile.position
-            s2 = s1 + TIMESTEP * PHYSICS_STEP_PER_TICK * projectile.velocity
-            segment = Segment(s1, s2)
+            segment = projectile.path(TIMESTEP)
 
             # check for collisions with obstacles
             obs_dist = np.inf
@@ -491,8 +371,7 @@ class Game:
 
                 # check for collision with the bullet's path
                 # TODO segment_segment_dist might be better here
-                # if point_segment_dist(agent.position, segment) < agent.shape.radius:
-                circle = Circle(agent.position, agent.shape.radius)
+                circle = agent.circle()
                 if circle_segment_intersect(circle, segment):
                     # if the projectile hit an obstacle first, then the agent
                     # is fine
@@ -502,28 +381,27 @@ class Game:
 
                     projectiles_to_remove.add(idx)
 
-                    agent.target_velocity += (
-                        0.5 * PLAYER_VELOCITY * unit(projectile.velocity)
-                    )
+                    agent.velocity += 0.5 * PLAYER_VELOCITY * unit(projectile.velocity)
                     agent.health -= 1
                     if agent.health <= 0:
                         agents_to_remove.add(agent_id)
 
+        # remove projectiles that have hit something
         for idx in projectiles_to_remove:
-            self.projectiles[idx].remove()
             self.projectiles.pop(idx)
 
+        # remove agents that have died
         for idx in agents_to_remove:
             print("dead!")
-            self.agents[idx].remove()
             self.agents.pop(idx)
 
-        for agent in self.agents.values():
-            agent.tick(self.obstacles)
+        # integrate forward
+        for projectile in self.projectiles.values():
+            projectile.step(TIMESTEP)
 
-        # physics
-        for _ in range(PHYSICS_STEP_PER_TICK):
-            self.space.step(TIMESTEP)
+        # TODO don't like that the obstacles gets passed in here
+        for agent in self.agents.values():
+            agent.step(TIMESTEP, self.obstacles)
 
     def loop(self):
         while True:
