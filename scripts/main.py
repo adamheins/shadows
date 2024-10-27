@@ -18,16 +18,6 @@ OBSTACLE_COLOR = (0, 0, 0)
 FRAMERATE = 60
 TIMESTEP = 1.0 / FRAMERATE
 
-PLAYER_VELOCITY = 200  # px per second
-BULLET_VELOCITY = 1000
-
-PLAYER_MASS = 10
-BULLET_MASS = 0.1
-
-CLIP_SIZE = 20  # bullets per reload
-SHOT_COOLDOWN_TICKS = 1
-RELOAD_TICKS = 2 * FRAMERATE
-
 
 def line_screen_edge_intersection(p, v):
     ts = []
@@ -95,7 +85,6 @@ class Obstacle(AARect):
 
         return [right, extra_right] + screen_vs + [extra_left, left]
 
-    # TODO move to collision code
     def compute_collision_normal(self, point, r):
         if point[0] >= self.x and point[0] <= self.x + self.w:
             if point[1] >= self.y - r and point[1] <= self.y + 0.5 * self.h:
@@ -108,6 +97,7 @@ class Obstacle(AARect):
             elif point[0] <= self.x + self.w + r and point[0] > self.x + 0.5 * self.w:
                 return (1, 0)
         else:
+            # closest point is one of the vertices
             v2 = np.sum((self.vertices - point) ** 2, axis=1)
             idx = np.argmin(v2)
             if v2[idx] <= r**2:
@@ -121,130 +111,6 @@ class Obstacle(AARect):
         ps = self._compute_occlusion(viewpoint)
         pygame.gfxdraw.aapolygon(surface, ps, (100, 100, 100))
         pygame.gfxdraw.filled_polygon(surface, ps, (100, 100, 100))
-
-
-class Entity:
-    """Pymunk entity."""
-
-    _current_id = 0
-
-    def __init__(self, position, velocity):
-        self.position = position
-        self.velocity = velocity
-
-        self.id = Entity._current_id
-        Entity._current_id += 1
-
-
-class Agent(Entity):
-    def __init__(self, position, color):
-        super().__init__(position, np.zeros(2))
-
-        self.color = color
-        self.radius = 10
-
-        self.health = 5
-        self.ammo = CLIP_SIZE
-        self.shot_cooldown = 0
-        self.reload_ticks = 0
-
-    def draw(self, surface):
-        pygame.gfxdraw.aacircle(
-            surface,
-            int(self.position[0]),
-            int(self.position[1]),
-            int(self.radius),
-            self.color,
-        )
-        pygame.gfxdraw.filled_circle(
-            surface,
-            int(self.position[0]),
-            int(self.position[1]),
-            int(self.radius),
-            self.color,
-        )
-
-    def move(self, velocity):
-        self.velocity += velocity
-
-    def step(self, dt, obstacles):
-        self.shot_cooldown = max(0, self.shot_cooldown - 1)
-
-        # if done reloading, fill clip
-        if self.reload_ticks == 1:
-            self.ammo = CLIP_SIZE
-        self.reload_ticks = max(0, self.reload_ticks - 1)
-
-        v = self.velocity
-
-        # don't leave the screen
-        if self.position[0] >= SCREEN_WIDTH - self.radius:
-            v[0] = min(0, v[0])
-        elif self.position[0] <= self.radius:
-            v[0] = max(0, v[0])
-        if self.position[1] >= SCREEN_HEIGHT - self.radius:
-            v[1] = min(0, v[1])
-        elif self.position[1] <= self.radius:
-            v[1] = max(0, v[1])
-
-        # don't walk into an obstacle
-        for obstacle in obstacles:
-            n = obstacle.compute_collision_normal(self.position, self.radius)
-            if n is not None and n @ v < 0:
-                t = orth(n)
-                v = (t @ v) * t
-
-        self.position += dt * v
-        self.velocity = np.zeros(2)
-
-    def reload(self):
-        self.reload_ticks = RELOAD_TICKS
-
-    def shoot(self, target):
-        if self.shot_cooldown > 0 or self.reload_ticks > 0:
-            return None
-
-        norm = np.linalg.norm(target - self.position)
-        if norm > 0:
-            direction = (target - self.position) / norm
-            self.shot_cooldown = SHOT_COOLDOWN_TICKS
-            self.ammo -= 1
-            if self.ammo == 0:
-                self.reload()
-            self.velocity -= 0.5 * PLAYER_VELOCITY * direction
-            return Projectile(
-                position=self.position.copy(),
-                velocity=BULLET_VELOCITY * direction,
-                agent_id=self.id,
-            )
-        else:
-            return None
-
-    def circle(self):
-        return Circle(self.position, self.radius)
-
-
-class Projectile(Entity):
-    def __init__(self, position, velocity, agent_id):
-        super().__init__(position, velocity)
-        self.agent_id = agent_id
-        self.color = (0, 0, 0, 255)
-        self.radius = 3
-
-    def draw(self, surface):
-        pygame.draw.circle(surface, self.color, self.position, self.radius)
-
-    def path(self, dt):
-        return Segment(self.position, self.position + dt * self.velocity)
-
-    def step(self, dt):
-        self.position += dt * self.velocity
-
-
-class AgentAction:
-    def __init__(self, velocity, target):
-        self.velocity = velocity
-        self.target = target
 
 
 class Game:
@@ -340,7 +206,34 @@ class Game:
                     if projectile is not None:
                         self.projectiles[projectile.id] = projectile
 
+                if action.reload:
+                    agent.reload()
+
                 agent.move(action.velocity)
+
+        # agents cannot walk off the screen and into obstacles
+        for agent in self.agents.values():
+            v = agent.velocity
+
+            # don't leave the screen
+            if agent.position[0] >= SCREEN_WIDTH - agent.radius:
+                v[0] = min(0, v[0])
+            elif agent.position[0] <= agent.radius:
+                v[0] = max(0, v[0])
+            if agent.position[1] >= SCREEN_HEIGHT - agent.radius:
+                v[1] = min(0, v[1])
+            elif agent.position[1] <= agent.radius:
+                v[1] = max(0, v[1])
+
+            # don't walk into an obstacle
+            if np.linalg.norm(v) > 0:
+                for obstacle in self.obstacles:
+                    n = obstacle.compute_collision_normal(agent.position, agent.radius)
+                    if n is not None and n @ v < 0:
+                        t = orth(n)
+                        v = (t @ v) * t
+
+            agent.velocity = v
 
         # process projectiles
         projectiles_to_remove = set()
@@ -354,7 +247,7 @@ class Game:
             # path of projectile's motion over the timestep
             segment = projectile.path(TIMESTEP)
 
-            # check for collisions with obstacles
+            # check for collision with obstacle
             obs_dist = np.inf
             for obstacle in self.obstacles:
                 if segment_rect_intersect(segment, obstacle):
@@ -395,13 +288,13 @@ class Game:
             print("dead!")
             self.agents.pop(idx)
 
-        # integrate forward
+        # integrate the game state forward in time
         for projectile in self.projectiles.values():
             projectile.step(TIMESTEP)
 
         # TODO don't like that the obstacles gets passed in here
         for agent in self.agents.values():
-            agent.step(TIMESTEP, self.obstacles)
+            agent.step(TIMESTEP)
 
     def loop(self):
         while True:
@@ -436,14 +329,10 @@ class Game:
             if norm > 0:
                 velocity = PLAYER_VELOCITY * velocity / norm
 
-            # TODO I guess reload can be dumped into the action as well
             # TODO I wonder if the action should just be the command ("go
             # left") rather than the actual velocity vector (the latter has
             # more DOFs than are actually available)
-            if reload:
-                self.player.reload()
-
-            actions = {self.player.id: AgentAction(velocity, target)}
+            actions = {self.player.id: Action(velocity, target, reload)}
 
             self.step(actions)
             self.draw()
