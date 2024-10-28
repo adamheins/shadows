@@ -3,13 +3,23 @@ import pygame
 
 from .collision import Circle, Segment
 
+# TODO how to handle these constants?
 
 PLAYER_VELOCITY = 200  # px per second
 BULLET_VELOCITY = 2000
 
-CLIP_SIZE = 20  # bullets per reload
 SHOT_COOLDOWN_TICKS = 1
 RELOAD_TICKS = 120
+
+PROJECTILE_COLOR = (0, 0, 0)
+PROJECTILE_RADIUS = 3
+
+PLAYER_COLOR = (255, 0, 0)
+ENEMY_COLOR = (0, 0, 255)
+AGENT_RADIUS = 10
+
+CLIP_SIZE = 20
+MAX_HEALTH = 5
 
 
 class Entity:
@@ -17,8 +27,11 @@ class Entity:
 
     _current_id = 0
 
-    def __init__(self, position, velocity):
+    def __init__(self, position, velocity=None):
         self.position = position
+
+        if velocity is None:
+            velocity = np.zeros_like(position)
         self.velocity = velocity
 
         self.id = Entity._current_id
@@ -27,15 +40,23 @@ class Entity:
 
 class Agent(Entity):
     def __init__(self, position, color):
-        super().__init__(position, np.zeros(2))
+        super().__init__(position)
 
         self.color = color
-        self.radius = 10
+        self.radius = AGENT_RADIUS
 
-        self.health = 5
+        self.health = MAX_HEALTH
         self.ammo = CLIP_SIZE
         self.shot_cooldown = 0
         self.reload_ticks = 0
+
+    @classmethod
+    def player(cls, position):
+        return cls(position, color=PLAYER_COLOR)
+
+    @classmethod
+    def enemy(cls, position):
+        return cls(position, color=ENEMY_COLOR)
 
     def draw(self, surface):
         pygame.gfxdraw.aacircle(
@@ -54,7 +75,7 @@ class Agent(Entity):
         )
 
     def move(self, velocity):
-        self.velocity += velocity
+        self.velocity = self.velocity + velocity
 
     def step(self, dt):
         self.shot_cooldown = max(0, self.shot_cooldown - 1)
@@ -100,11 +121,13 @@ class Agent(Entity):
 
 
 class Projectile(Entity):
+    """A bullet fired by an agent."""
+
     def __init__(self, position, velocity, agent_id):
         super().__init__(position, velocity)
         self.agent_id = agent_id
-        self.color = (0, 0, 0, 255)
-        self.radius = 3
+        self.color = PROJECTILE_COLOR
+        self.radius = PROJECTILE_RADIUS
 
     def draw(self, surface):
         pygame.draw.circle(surface, self.color, self.position, self.radius)
@@ -117,6 +140,8 @@ class Projectile(Entity):
 
 
 class Action:
+    """Action for one agent."""
+
     def __init__(self, velocity, target, reload=False):
         self.velocity = velocity
         self.target = target

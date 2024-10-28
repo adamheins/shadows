@@ -3,6 +3,8 @@ import pygame
 import pygame.gfxdraw
 import numpy as np
 
+# import gymnasium as gym
+
 from shoot import *
 
 
@@ -17,6 +19,8 @@ OBSTACLE_COLOR = (0, 0, 0)
 
 FRAMERATE = 60
 TIMESTEP = 1.0 / FRAMERATE
+
+DISPLAY = True
 
 
 def line_screen_edge_intersection(p, v):
@@ -117,13 +121,13 @@ class Game:
     def __init__(self):
         self.font = pygame.font.SysFont(None, 28)
         self.ammo_text = Text(
-            text=f"Ammo: {CLIP_SIZE}",
+            text=f"Ammo: 0",
             font=self.font,
             position=(20, SCREEN_HEIGHT - 60),
             color=(0, 0, 0),
         )
         self.health_text = Text(
-            text="Health: 5",
+            text="Health: 0",
             font=self.font,
             position=(20, SCREEN_HEIGHT - 30),
             color=(0, 0, 0),
@@ -131,11 +135,12 @@ class Game:
 
         self.texts = [self.ammo_text, self.health_text]
 
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        if DISPLAY:
+            self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        else:
+            self.screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         self.clock = pygame.time.Clock()
-        self.screen.fill(BACKGROUND_COLOR)
         self.screen_rect = self.screen.get_bounding_rect()
-        pygame.display.flip()
 
         self.keys_down = set()
 
@@ -151,9 +156,9 @@ class Game:
             Obstacle(250, 380, 200, 40),
         ]
 
-        self.player = Agent(position=[200, 200], color=(255, 0, 0, 255))
-        enemies = [Agent(position=[200, 300], color=(0, 0, 255, 255))]
-
+        # player and enemy agents
+        self.player = Agent.player(position=[200, 200])
+        enemies = [Agent.enemy(position=[200, 300])]
         self.agents = {enemy.id: enemy for enemy in enemies}
         self.agents[self.player.id] = self.player
 
@@ -188,12 +193,12 @@ class Game:
         for text in self.texts:
             text.draw(self.screen)
 
-        pygame.display.flip()
-
-        # NOTE: this is how to extract the RGB values
-        # raw = np.array(pygame.PixelArray(self.screen))
-        # rgb = np.array([raw >> 16, raw >> 8, raw]) & 0xff
-        # rgb = np.moveaxis(rgb, 0, -1)
+        if DISPLAY:
+            pygame.display.flip()
+        else:
+            raw = np.array(pygame.PixelArray(self.screen))
+            rgb = np.array([raw >> 16, raw >> 8, raw]) & 0xff
+            rgb = np.moveaxis(rgb, 0, -1)
 
     def step(self, actions):
         """Step the game forward in time."""
