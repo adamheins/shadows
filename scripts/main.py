@@ -3,19 +3,13 @@ import pygame
 import pygame.gfxdraw
 import numpy as np
 
-# import gymnasium as gym
+import gymnasium as gym
 
 from shoot import *
 
 
-SCREEN_WIDTH = 500
-SCREEN_HEIGHT = 500
-SCREEN_VERTS = np.array(
-    [[0, 0], [SCREEN_WIDTH, 0], [SCREEN_WIDTH, SCREEN_HEIGHT], [0, SCREEN_HEIGHT]]
-)
-
+SCREEN_SHAPE = (500, 500)
 BACKGROUND_COLOR = (219, 200, 184)
-OBSTACLE_COLOR = (0, 0, 0)
 
 FRAMERATE = 60
 TIMESTEP = 1.0 / FRAMERATE
@@ -23,102 +17,8 @@ TIMESTEP = 1.0 / FRAMERATE
 DISPLAY = True
 
 
-def line_screen_edge_intersection(p, v):
-    ts = []
-
-    # vertical edges
-    if not np.isclose(v[0], 0):
-        ts.extend([-p[0] / v[0], (SCREEN_WIDTH - p[0]) / v[0]])
-
-    # horizontal edges
-    if not np.isclose(v[1], 0):
-        ts.extend([-p[1] / v[1], (SCREEN_HEIGHT - p[1]) / v[1]])
-
-    # return the smallest positive value
-    ts = np.array(ts)
-    t = np.min(ts[ts >= 0])
-    return p + t * v
-
-
-class Obstacle(AARect):
-    def __init__(self, x, y, w, h):
-        super().__init__(x, y, w, h)
-        self.color = OBSTACLE_COLOR
-        self.rect = pygame.Rect(x, y, w, h)
-
-    def _compute_witness_vertices(self, point, tol=1e-3):
-        right = None
-        left = None
-        for i in range(len(self.vertices)):
-            vert = self.vertices[i]
-            delta = vert - point
-            normal = orth(delta)
-            dists = (self.vertices - point) @ normal
-            if np.all(dists >= -tol):
-                right = vert
-            elif np.all(dists <= tol):
-                left = vert
-            if left is not None and right is not None:
-                break
-        return right, left
-
-    def _compute_occlusion(self, point, tol=1e-3):
-        right, left = self._compute_witness_vertices(point, tol=tol)
-
-        delta_right = right - point
-        extra_right = line_screen_edge_intersection(right, delta_right)
-        normal_right = orth(delta_right)
-
-        delta_left = left - point
-        extra_left = line_screen_edge_intersection(left, delta_left)
-        normal_left = orth(delta_left)
-
-        screen_dists = []
-        screen_vs = []
-        for v in SCREEN_VERTS:
-            if -(v - point) @ normal_left < 0:
-                continue
-            dist = (v - point) @ normal_right
-            if dist >= 0:
-                if len(screen_dists) > 0 and screen_dists[0] > dist:
-                    screen_vs = [v, screen_vs[0]]
-                    break
-                else:
-                    screen_dists.append(dist)
-                    screen_vs.append(v)
-
-        return [right, extra_right] + screen_vs + [extra_left, left]
-
-    def compute_collision_normal(self, point, r):
-        if point[0] >= self.x and point[0] <= self.x + self.w:
-            if point[1] >= self.y - r and point[1] <= self.y + 0.5 * self.h:
-                return (0, -1)
-            elif point[1] <= self.y + self.h + r and point[1] > self.y + 0.5 * self.h:
-                return (0, 1)
-        elif point[1] >= self.y and point[1] <= self.y + self.h:
-            if point[0] >= self.x - r and point[0] <= self.x + 0.5 * self.w:
-                return (-1, 0)
-            elif point[0] <= self.x + self.w + r and point[0] > self.x + 0.5 * self.w:
-                return (1, 0)
-        else:
-            # closest point is one of the vertices
-            v2 = np.sum((self.vertices - point) ** 2, axis=1)
-            idx = np.argmin(v2)
-            if v2[idx] <= r**2:
-                return unit(point - self.vertices[idx, :])
-        return None
-
-    def draw(self, surface):
-        pygame.draw.rect(surface, self.color, self.rect)
-
-    def draw_occlusion(self, surface, viewpoint):
-        ps = self._compute_occlusion(viewpoint)
-        pygame.gfxdraw.aapolygon(surface, ps, (100, 100, 100))
-        pygame.gfxdraw.filled_polygon(surface, ps, (100, 100, 100))
-
-
 class Game:
-    def __init__(self):
+    def __init__(self, shape):
         self.font = pygame.font.SysFont(None, 28)
         self.ammo_text = Text(
             text=f"Ammo: 0",
@@ -136,11 +36,11 @@ class Game:
         self.texts = [self.ammo_text, self.health_text]
 
         if DISPLAY:
-            self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+            self.screen = pygame.display.set_mode(shape)
         else:
-            self.screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+            self.screen = pygame.Surface(shape)
         self.clock = pygame.time.Clock()
-        self.screen_rect = self.screen.get_bounding_rect()
+        self.screen_rect = AARect(0, 0, shape[0], shape[1])
 
         self.keys_down = set()
 
@@ -172,7 +72,11 @@ class Game:
             agent.draw(self.screen)
 
         for obstacle in self.obstacles:
-            obstacle.draw_occlusion(self.screen, viewpoint=self.player.position)
+            obstacle.draw_occlusion(
+                self.screen,
+                viewpoint=self.player.position,
+                screen_rect=self.screen_rect,
+            )
 
         for obstacle in self.obstacles:
             obstacle.draw(self.screen)
@@ -197,7 +101,7 @@ class Game:
             pygame.display.flip()
         else:
             raw = np.array(pygame.PixelArray(self.screen))
-            rgb = np.array([raw >> 16, raw >> 8, raw]) & 0xff
+            rgb = np.array([raw >> 16, raw >> 8, raw]) & 0xFF
             rgb = np.moveaxis(rgb, 0, -1)
 
     def step(self, actions):
@@ -221,11 +125,11 @@ class Game:
             v = agent.velocity
 
             # don't leave the screen
-            if agent.position[0] >= SCREEN_WIDTH - agent.radius:
+            if agent.position[0] >= self.screen_rect.w - agent.radius:
                 v[0] = min(0, v[0])
             elif agent.position[0] <= agent.radius:
                 v[0] = max(0, v[0])
-            if agent.position[1] >= SCREEN_HEIGHT - agent.radius:
+            if agent.position[1] >= self.screen_rect.h - agent.radius:
                 v[1] = min(0, v[1])
             elif agent.position[1] <= agent.radius:
                 v[1] = max(0, v[1])
@@ -245,7 +149,7 @@ class Game:
         agents_to_remove = set()
         for idx, projectile in self.projectiles.items():
             # projectile has left the screen
-            if not self.screen_rect.collidepoint(projectile.position):
+            if not point_in_rect(projectile.position, self.screen_rect):
                 projectiles_to_remove.add(idx)
                 continue
 
@@ -344,10 +248,24 @@ class Game:
             self.clock.tick(FRAMERATE)
 
 
+class ShootEnv(gym.Env):
+    def __init__(self):
+        # TODO build an instance of the game
+        pass
+
+    def reset(self, seed=None):
+        # reset the game environment
+        pass
+
+    def step(self, action):
+        # step the game forward in time, extracting the observation space
+        pass
+
+
 def main():
     pygame.init()
 
-    game = Game()
+    game = Game((SCREEN_WIDTH, SCREEN_HEIGHT))
     game.loop()
 
 
