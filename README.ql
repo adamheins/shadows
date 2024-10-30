@@ -13,6 +13,8 @@
   - forward (not it): fast
 * This would allow me to avoid projectiles, ammo, and health mechanics, though
   I could bring in shooting type powerups if needed.
+* Idea: use the mouse to look over one's shoulder, but this slows you down
+  depending on angle between view angle and direction of travel
 
 = Other game =
 * Another idea for a game is to have one applying force to some body while

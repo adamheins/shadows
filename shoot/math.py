@@ -1,3 +1,4 @@
+import math
 import numpy as np
 
 
@@ -21,4 +22,6 @@ def rotmat(angle):
     return np.array([[c, s], [-s, c]])
 
 
-
+def wrap_to_pi(x):
+    """Wrap a value to [-pi, pi]"""
+    return math.remainder(x, 2 * np.pi)

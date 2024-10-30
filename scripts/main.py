@@ -15,44 +15,40 @@ FRAMERATE = 60
 TIMESTEP = 1.0 / FRAMERATE
 
 
-class ShootAIPolicy:
-    def __init__(self, agent_id, player_id, agents, obstacles):
-        self.agent = agents[agent_id]
-        self.player = agents[player_id]
-
-        self.agents = agents
-        self.obstacles = obstacles
-
-    def step(self, dt):
-        target = self.player.position
-        reload = False
-
-        # move toward the player if they are not too close by
-        delta = self.player.position - self.agent.position
-        dist = np.linalg.norm(delta)
-        if dist <= 3 * self.player.radius:
-            velocity = np.zeros(2)
-        else:
-            velocity = PLAYER_VELOCITY * delta / dist
-
-        # check if player is behind an obstacle, in which case don't shoot at
-        # them
-        segment = Segment(self.agent.position, self.player.position)
-        for obstacle in self.obstacles:
-            if segment_rect_intersect(segment, obstacle):
-                target = None
-
-        # reload if not shooting and clip is low
-        if target is None and self.agent.ammo <= 5:
-            reload = True
-
-        return {
-            self.agent.id: Action(
-                velocity=velocity, target=target, reload=reload
-            )
-        }
-
-
+# class ShootAIPolicy:
+#     def __init__(self, agent_id, player_id, agents, obstacles):
+#         self.agent = agents[agent_id]
+#         self.player = agents[player_id]
+#
+#         self.agents = agents
+#         self.obstacles = obstacles
+#
+#     def step(self, dt):
+#         target = self.player.position
+#         reload = False
+#
+#         # move toward the player if they are not too close by
+#         delta = self.player.position - self.agent.position
+#         dist = np.linalg.norm(delta)
+#         if dist <= 3 * self.player.radius:
+#             velocity = np.zeros(2)
+#         else:
+#             velocity = PLAYER_VELOCITY * delta / dist
+#
+#         # check if player is behind an obstacle, in which case don't shoot at
+#         # them
+#         segment = Segment(self.agent.position, self.player.position)
+#         for obstacle in self.obstacles:
+#             if segment_rect_intersect(segment, obstacle):
+#                 target = None
+#
+#         # reload if not shooting and clip is low
+#         if target is None and self.agent.ammo <= 5:
+#             reload = True
+#
+#         return {self.agent.id: Action(velocity=velocity, target=target, reload=reload)}
+#
+#
 class TagItAIPolicy:
     def __init__(self, agent_id, player_id, agents, obstacles):
         self.agent = agents[agent_id]
@@ -72,18 +68,22 @@ class TagItAIPolicy:
             angvel = 1
         elif a > np.pi:
             angvel = -1
-
-        self.agent.angle += TIMESTEP * 5 * angvel
-        if self.agent.angle > np.pi:
-            self.agent.angle -= 2 * np.pi
-        elif self.agent.angle < -np.pi:
-            self.agent.angle += 2 * np.pi
-
-        velocity = PLAYER_VELOCITY * rotmat(self.agent.angle) @ [1, 0]
+        #
+        # self.agent.angle += TIMESTEP * 5 * angvel
+        # if self.agent.angle > np.pi:
+        #     self.agent.angle -= 2 * np.pi
+        # elif self.agent.angle < -np.pi:
+        #     self.agent.angle += 2 * np.pi
+        #
+        # velocity = PLAYER_VELOCITY * rotmat(self.agent.angle) @ [1, 0]
 
         return {
             self.agent.id: Action(
-                velocity=velocity, target=None, reload=False
+                lindir=[1, 0],
+                angdir=angvel,
+                target=None,
+                reload=False,
+                frame=Action.LOCAL,
             )
         }
 
@@ -195,16 +195,9 @@ class Game:
         for agent_id, agent in self.agents.items():
             if agent_id in actions:
                 action = actions[agent_id]
-
-                if action.target is not None:
-                    projectile = agent.shoot(action.target)
-                    if projectile is not None:
-                        self.projectiles[projectile.id] = projectile
-
-                if action.reload:
-                    agent.reload()
-
-                agent.move(action.velocity)
+                projectile = agent.command(action)
+                if projectile is not None:
+                    self.projectiles[projectile.id] = projectile
 
         # agents cannot walk off the screen and into obstacles
         for agent in self.agents.values():
@@ -269,7 +262,7 @@ class Game:
 
                     projectiles_to_remove.add(idx)
 
-                    agent.velocity += 0.5 * PLAYER_VELOCITY * unit(projectile.velocity)
+                    agent.velocity += 100 * unit(projectile.velocity)
                     agent.health -= 1
                     if agent.health <= 0:
                         agents_to_remove.add(agent_id)
@@ -311,40 +304,30 @@ class Game:
                     target = np.array(pygame.mouse.get_pos())
 
             # respond to events
-            velocity = np.zeros(2)
-            linvel = 0
-            angvel = 0
+            lindir = 0
+            angdir = 0
             if pygame.K_d in self.keys_down:
                 # velocity[0] += 1
-                angvel -= 1
+                angdir -= 1
             if pygame.K_a in self.keys_down:
                 # velocity[0] -= 1
-                angvel += 1
+                angdir += 1
             if pygame.K_w in self.keys_down:
-                linvel += 1
+                lindir += 1
                 # velocity[1] -= 1
             if pygame.K_s in self.keys_down:
                 # velocity[1] += 1
-                linvel -= 0.5
+                lindir -= 1
 
-            # norm = np.linalg.norm(velocity)
-            # if norm > 0:
-            #     velocity = PLAYER_VELOCITY * velocity / norm
-            # TODO need to wrap to pi better
-            self.player.angle += TIMESTEP * 5 * angvel
-            if self.player.angle > np.pi:
-                self.player.angle -= 2 * np.pi
-            elif self.player.angle < -np.pi:
-                self.player.angle += 2 * np.pi
-
-            velocity = linvel * PLAYER_VELOCITY * rotmat(self.player.angle) @ [1, 0]
-
-            # TODO I wonder if the action should just be the command ("go
-            # left") rather than the actual velocity vector (the latter has
-            # more DOFs than are actually available)
             actions = self.enemy_policy.step(TIMESTEP)
             # actions = {}
-            actions[self.player.id] = Action(velocity, target, reload)
+            actions[self.player.id] = Action(
+                lindir=[lindir, 0],
+                angdir=angdir,
+                target=target,
+                reload=reload,
+                frame=Action.LOCAL,
+            )
 
             self.step(actions)
             self.draw()
@@ -399,7 +382,7 @@ class ShootEnv(gym.Env):
 def main():
     pygame.init()
 
-    game = Game(SCREEN_SHAPE, display=False)
+    game = Game(SCREEN_SHAPE, display=True)
     game.loop()
 
 
