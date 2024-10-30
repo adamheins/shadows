@@ -112,8 +112,11 @@ class Game:
         for projectile in self.projectiles.values():
             projectile.draw(self.screen)
 
-        for agent in self.agents.values():
-            agent.draw(self.screen)
+        for enemy in self.enemies:
+            enemy.draw(self.screen)
+
+        self.player.draw_view_occlusion(self.screen, self.screen_rect)
+        self.player.draw(self.screen)
 
         for obstacle in self.obstacles:
             obstacle.draw_occlusion(
@@ -271,22 +274,39 @@ class Game:
 
             # respond to events
             velocity = np.zeros(2)
+            linvel = 0
+            angvel = 0
             if pygame.K_d in self.keys_down:
-                velocity[0] += 1
+                # velocity[0] += 1
+                angvel -= 1
             if pygame.K_a in self.keys_down:
-                velocity[0] -= 1
+                # velocity[0] -= 1
+                angvel += 1
             if pygame.K_w in self.keys_down:
-                velocity[1] -= 1
+                linvel += 1
+                # velocity[1] -= 1
             if pygame.K_s in self.keys_down:
-                velocity[1] += 1
-            norm = np.linalg.norm(velocity)
-            if norm > 0:
-                velocity = PLAYER_VELOCITY * velocity / norm
+                # velocity[1] += 1
+                linvel -= 0.5
+
+            # norm = np.linalg.norm(velocity)
+            # if norm > 0:
+            #     velocity = PLAYER_VELOCITY * velocity / norm
+            # TODO need to wrap to pi better
+            self.player.angle += TIMESTEP * 5 * angvel
+            if self.player.angle > np.pi:
+                self.player.angle -= 2 * np.pi
+            elif self.player.angle < -np.pi:
+                self.player.angle += 2 * np.pi
+
+            if np.abs(linvel) > 0:
+                velocity = linvel * PLAYER_VELOCITY * rotmat(self.player.angle) @ [1, 0]
 
             # TODO I wonder if the action should just be the command ("go
             # left") rather than the actual velocity vector (the latter has
             # more DOFs than are actually available)
-            actions = self.enemy_policy.step(TIMESTEP)
+            # actions = self.enemy_policy.step(TIMESTEP)
+            actions = {}
             actions[self.player.id] = Action(velocity, target, reload)
 
             self.step(actions)

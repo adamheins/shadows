@@ -1,7 +1,8 @@
 import numpy as np
 import pygame
 
-from .collision import Circle, Segment
+from .math import rotmat, orth
+from .collision import Circle, Segment, line_rect_edge_intersection
 
 # TODO how to handle these constants?
 
@@ -39,11 +40,14 @@ class Entity:
 
 
 class Agent(Entity):
-    def __init__(self, position, color):
+    def __init__(self, position, color, angle=0):
         super().__init__(position)
 
         self.color = color
         self.radius = AGENT_RADIUS
+
+        # in radians, relative to positive x-axis
+        self.angle = angle
 
         self.health = MAX_HEALTH
         self.ammo = CLIP_SIZE
@@ -119,11 +123,38 @@ class Agent(Entity):
         """Generate a bounding circle at the agent's current position."""
         return Circle(self.position, self.radius)
 
-    def compute_view(self):
-        pass
+    def _compute_view_occlusion(self, screen_rect):
+        view_angle = np.pi / 3
+        vr = rotmat(self.angle + view_angle) @ [1, 0]
+        vl = rotmat(self.angle - view_angle) @ [1, 0]
 
-    def draw_view_occlusion(self, surface):
-        pass
+        extra_right = line_rect_edge_intersection(self.position, vr, screen_rect)
+        extra_left = line_rect_edge_intersection(self.position, vl, screen_rect)
+
+        screen_dists = []
+        screen_vs = []
+        for v in screen_rect.vertices:
+            r = v - self.position
+
+            # compute angle and don't wrap it around pi
+            a = np.arctan2(-r[1], r[0]) - self.angle
+            if a < 0:
+                a = 2 * np.pi + a
+
+            # only consider the vertices *not* in the player's view
+            if a >= view_angle and a <= 2 * np.pi - view_angle:
+                screen_dists.append(a)
+                screen_vs.append(v)
+
+        # sort vertices in order of increasing angle
+        idx = np.argsort(screen_dists)
+        screen_vs = [screen_vs[i] for i in idx]
+        return [self.position, extra_right] + screen_vs + [extra_left]
+
+    def draw_view_occlusion(self, surface, screen_rect):
+        ps = self._compute_view_occlusion(screen_rect)
+        pygame.gfxdraw.aapolygon(surface, ps, (100, 100, 100))
+        pygame.gfxdraw.filled_polygon(surface, ps, (100, 100, 100))
 
 
 class Projectile(Entity):

@@ -1,17 +1,6 @@
 import numpy as np
 
-
-def unit(v):
-    """Normalize to a unit vector."""
-    norm = np.linalg.norm(v)
-    if np.isclose(norm, 0):
-        return np.zeros_like(v)
-    return v / norm
-
-
-def orth(v):
-    """Generate a 2D orthogonal to v."""
-    return np.array([v[1], -v[0]])
+from .math import unit, orth
 
 
 class AARect:
@@ -46,6 +35,46 @@ class Circle:
     def __init__(self, c, r):
         self.c = c
         self.r = r
+
+
+def line_rect_edge_intersection(p, v, rect):
+    """Compute the intersection of a line with the edge of the screen.
+
+    Parameters
+    ----------
+    p : pair of float
+        Starting point of the line.
+    v : pair of float
+        Direction vector of the line (does not need to be normalized).
+    rect : AARect
+        Rectangle of the screen.
+
+    Returns
+    -------
+    : pair of float
+        The closest intersection point corresponding to non-negative distance
+        along direction v.
+    """
+    # TODO can generalize to get rid of this
+    assert rect.x == 0
+    assert rect.y == 0
+
+    ts = []
+
+    # vertical edges
+    if not np.isclose(v[0], 0):
+        ts.extend([-p[0] / v[0], (rect.w - p[0]) / v[0]])
+
+    # horizontal edges
+    if not np.isclose(v[1], 0):
+        ts.extend([-p[1] / v[1], (rect.h - p[1]) / v[1]])
+
+    # return the smallest positive value
+    ts = np.array(ts)
+    t = np.min(ts[ts >= 0])
+    return p + t * v
+
+
 
 
 def point_in_rect(point, rect):

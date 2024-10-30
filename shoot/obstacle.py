@@ -1,49 +1,12 @@
 import numpy as np
 import pygame
 
-from .collision import AARect, orth, unit
+from .math import orth, unit
+from .collision import AARect, line_rect_edge_intersection
 
 
 OBSTACLE_COLOR = (0, 0, 0)
 SHADOW_COLOR = (100, 100, 100)
-
-
-def _line_rect_edge_intersection(p, v, rect):
-    """Compute the intersection of a line with the edge of the screen.
-
-    Parameters
-    ----------
-    p : pair of float
-        Starting point of the line.
-    v : pair of float
-        Direction vector of the line (does not need to be normalized).
-    rect : AARect
-        Rectangle of the screen.
-
-    Returns
-    -------
-    : pair of float
-        The closest intersection point corresponding to non-negative distance
-        along direction v.
-    """
-    # TODO can generalize to get rid of this
-    assert rect.x == 0
-    assert rect.y == 0
-
-    ts = []
-
-    # vertical edges
-    if not np.isclose(v[0], 0):
-        ts.extend([-p[0] / v[0], (rect.w - p[0]) / v[0]])
-
-    # horizontal edges
-    if not np.isclose(v[1], 0):
-        ts.extend([-p[1] / v[1], (rect.h - p[1]) / v[1]])
-
-    # return the smallest positive value
-    ts = np.array(ts)
-    t = np.min(ts[ts >= 0])
-    return p + t * v
 
 
 class Obstacle(AARect):
@@ -72,11 +35,11 @@ class Obstacle(AARect):
         right, left = self._compute_witness_vertices(point, tol=tol)
 
         delta_right = right - point
-        extra_right = _line_rect_edge_intersection(right, delta_right, screen_rect)
+        extra_right = line_rect_edge_intersection(right, delta_right, screen_rect)
         normal_right = orth(delta_right)
 
         delta_left = left - point
-        extra_left = _line_rect_edge_intersection(left, delta_left, screen_rect)
+        extra_left = line_rect_edge_intersection(left, delta_left, screen_rect)
         normal_left = orth(delta_left)
 
         screen_dists = []
