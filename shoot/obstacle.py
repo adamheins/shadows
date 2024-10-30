@@ -1,7 +1,7 @@
 import numpy as np
 import pygame
 
-from .collision import AARect, orth
+from .collision import AARect, orth, unit
 
 
 OBSTACLE_COLOR = (0, 0, 0)

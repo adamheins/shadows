@@ -6,9 +6,9 @@ from .collision import Circle, Segment
 # TODO how to handle these constants?
 
 PLAYER_VELOCITY = 200  # px per second
-BULLET_VELOCITY = 2000
+BULLET_VELOCITY = 500
 
-SHOT_COOLDOWN_TICKS = 1
+SHOT_COOLDOWN_TICKS = 20
 RELOAD_TICKS = 120
 
 PROJECTILE_COLOR = (0, 0, 0)
@@ -18,8 +18,8 @@ PLAYER_COLOR = (255, 0, 0)
 ENEMY_COLOR = (0, 0, 255)
 AGENT_RADIUS = 10
 
-CLIP_SIZE = 20
-MAX_HEALTH = 5
+CLIP_SIZE = 1
+MAX_HEALTH = 1
 
 
 class Entity:
@@ -28,7 +28,7 @@ class Entity:
     _current_id = 0
 
     def __init__(self, position, velocity=None):
-        self.position = position
+        self.position = np.array(position)
 
         if velocity is None:
             velocity = np.zeros_like(position)
@@ -118,6 +118,12 @@ class Agent(Entity):
     def circle(self):
         """Generate a bounding circle at the agent's current position."""
         return Circle(self.position, self.radius)
+
+    def compute_view(self):
+        pass
+
+    def draw_view_occlusion(self, surface):
+        pass
 
 
 class Projectile(Entity):

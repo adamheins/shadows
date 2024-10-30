@@ -14,28 +14,65 @@ BACKGROUND_COLOR = (219, 200, 184)
 FRAMERATE = 60
 TIMESTEP = 1.0 / FRAMERATE
 
-DISPLAY = True
+
+class DefaultAIPolicy:
+    def __init__(self, agent_id, player_id, agents, obstacles):
+        self.agent = agents[agent_id]
+        self.player = agents[player_id]
+
+        self.agents = agents
+        self.obstacles = obstacles
+
+    def step(self, dt):
+        target = self.player.position
+        reload = False
+
+        # move toward the player if they are not too close by
+        delta = self.player.position - self.agent.position
+        dist = np.linalg.norm(delta)
+        if dist <= 3 * self.player.radius:
+            velocity = np.zeros(2)
+        else:
+            velocity = PLAYER_VELOCITY * delta / dist
+
+        # check if player is behind an obstacle, in which case don't shoot at
+        # them
+        segment = Segment(self.agent.position, self.player.position)
+        for obstacle in self.obstacles:
+            if segment_rect_intersect(segment, obstacle):
+                target = None
+
+        # reload if not shooting and clip is low
+        if target is None and self.agent.ammo <= 5:
+            reload = True
+
+        return {
+            self.agent.id: Action(
+                velocity=velocity, target=target, reload=False
+            )
+        }
 
 
 class Game:
-    def __init__(self, shape):
+    def __init__(self, shape, display=True):
+        self.display = display
         self.font = pygame.font.SysFont(None, 28)
         self.ammo_text = Text(
             text=f"Ammo: 0",
             font=self.font,
-            position=(20, SCREEN_HEIGHT - 60),
+            position=(20, shape[1] - 60),
             color=(0, 0, 0),
         )
         self.health_text = Text(
             text="Health: 0",
             font=self.font,
-            position=(20, SCREEN_HEIGHT - 30),
+            position=(20, shape[1] - 30),
             color=(0, 0, 0),
         )
 
         self.texts = [self.ammo_text, self.health_text]
 
-        if DISPLAY:
+        if self.display:
             self.screen = pygame.display.set_mode(shape)
         else:
             self.screen = pygame.Surface(shape)
@@ -46,21 +83,28 @@ class Game:
 
         self.projectiles = {}
 
+        # self.obstacles = [
+        #     Obstacle(80, 80, 80, 80),
+        #     Obstacle(0, 230, 160, 40),
+        #     Obstacle(80, 340, 80, 80),
+        #     Obstacle(250, 80, 40, 220),
+        #     Obstacle(290, 80, 100, 40),
+        #     Obstacle(390, 260, 110, 40),
+        #     Obstacle(250, 380, 200, 40),
+        # ]
         self.obstacles = [
-            Obstacle(80, 80, 80, 80),
-            Obstacle(0, 230, 160, 40),
-            Obstacle(80, 340, 80, 80),
-            Obstacle(250, 80, 40, 220),
-            Obstacle(290, 80, 100, 40),
-            Obstacle(390, 260, 110, 40),
-            Obstacle(250, 380, 200, 40),
+            Obstacle(200, 200, 100, 100),
         ]
 
         # player and enemy agents
-        self.player = Agent.player(position=[200, 200])
-        enemies = [Agent.enemy(position=[200, 300])]
-        self.agents = {enemy.id: enemy for enemy in enemies}
+        self.player = Agent.player(position=[100, 100])
+        self.enemies = [Agent.enemy(position=[400, 400])]
+        self.agents = {enemy.id: enemy for enemy in self.enemies}
         self.agents[self.player.id] = self.player
+
+        self.enemy_policy = DefaultAIPolicy(
+            self.enemies[0].id, self.player.id, self.agents, self.obstacles
+        )
 
     def draw(self):
         self.screen.fill(BACKGROUND_COLOR)
@@ -81,28 +125,29 @@ class Game:
         for obstacle in self.obstacles:
             obstacle.draw(self.screen)
 
-        # text
-        if self.player.reload_ticks > 0:
-            self.ammo_text.update(text=f"Reloading...", color=(255, 0, 0))
-        else:
-            self.ammo_text.update(text=f"Ammo: {self.player.ammo}", color=(0, 0, 0))
+        if self.display:
+            # text
+            if self.player.reload_ticks > 0:
+                self.ammo_text.update(text=f"Reloading...", color=(255, 0, 0))
+            else:
+                self.ammo_text.update(text=f"Ammo: {self.player.ammo}", color=(0, 0, 0))
 
-        if self.player.health > 2:
-            self.health_text.update(text=f"Health: {self.player.health}")
-        else:
-            self.health_text.update(
-                text=f"Health: {self.player.health}", color=(255, 0, 0)
-            )
+            if self.player.health > 2:
+                self.health_text.update(text=f"Health: {self.player.health}")
+            else:
+                self.health_text.update(
+                    text=f"Health: {self.player.health}", color=(255, 0, 0)
+                )
 
-        for text in self.texts:
-            text.draw(self.screen)
+            for text in self.texts:
+                text.draw(self.screen)
 
-        if DISPLAY:
             pygame.display.flip()
         else:
             raw = np.array(pygame.PixelArray(self.screen))
             rgb = np.array([raw >> 16, raw >> 8, raw]) & 0xFF
             rgb = np.moveaxis(rgb, 0, -1)
+            return rgb
 
     def step(self, actions):
         """Step the game forward in time."""
@@ -111,7 +156,7 @@ class Game:
                 action = actions[agent_id]
 
                 if action.target is not None:
-                    projectile = self.player.shoot(action.target)
+                    projectile = agent.shoot(action.target)
                     if projectile is not None:
                         self.projectiles[projectile.id] = projectile
 
@@ -241,7 +286,8 @@ class Game:
             # TODO I wonder if the action should just be the command ("go
             # left") rather than the actual velocity vector (the latter has
             # more DOFs than are actually available)
-            actions = {self.player.id: Action(velocity, target, reload)}
+            actions = self.enemy_policy.step(TIMESTEP)
+            actions[self.player.id] = Action(velocity, target, reload)
 
             self.step(actions)
             self.draw()
@@ -249,23 +295,54 @@ class Game:
 
 
 class ShootEnv(gym.Env):
-    def __init__(self):
-        # TODO build an instance of the game
-        pass
+    def __init__(self, shape):
+        self.game = Game(shape, display=False)
+
+        # get enemy id
+        self.agent_id = self.game.enemies[0].id
+
+        self.action_space = gym.spaces.Dict(
+            {
+                "direction": gym.spaces.Discrete(8),
+                "target": gym.spaces.Box(low=[0, 0], high=shape, dtype=np.float32),
+                "reload": gym.spaces.MultiBinary(1),
+            }
+        )
+
+        # semantically labelled pixels
+        self.observation_space = gym.spaces.Dict(
+            {
+                "health": gym.spaces.Box(low=1, high=5, dtype=np.uint8),
+                "ammo": gym.spaces.Box(low=0, high=20, dtype=np.uint8),
+                "field": gym.spaces.Box(
+                    low=np.zeros(shape), high=6 * np.ones(shape), dtype=np.uint8
+                ),
+            }
+        )
 
     def reset(self, seed=None):
         # reset the game environment
+        # TODO randomly populate the game
+        super().reset(seed=seed)
+
+        # TODO agents needs to be randomly placed
+
+        obs = self.game.draw()
         pass
 
     def step(self, action):
+        self.game.step()
+        obs = self.game.draw()
         # step the game forward in time, extracting the observation space
-        pass
+
+        info = None
+        return obs, reward, terminated, truncated, info
 
 
 def main():
     pygame.init()
 
-    game = Game((SCREEN_WIDTH, SCREEN_HEIGHT))
+    game = Game(SCREEN_SHAPE)
     game.loop()
 
 
