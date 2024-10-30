@@ -15,7 +15,7 @@ FRAMERATE = 60
 TIMESTEP = 1.0 / FRAMERATE
 
 
-class DefaultAIPolicy:
+class ShootAIPolicy:
     def __init__(self, agent_id, player_id, agents, obstacles):
         self.agent = agents[agent_id]
         self.player = agents[player_id]
@@ -48,7 +48,42 @@ class DefaultAIPolicy:
 
         return {
             self.agent.id: Action(
-                velocity=velocity, target=target, reload=False
+                velocity=velocity, target=target, reload=reload
+            )
+        }
+
+
+class TagItAIPolicy:
+    def __init__(self, agent_id, player_id, agents, obstacles):
+        self.agent = agents[agent_id]
+        self.player = agents[player_id]
+
+        self.agents = agents
+        self.obstacles = obstacles
+
+    def step(self, dt):
+        r = self.player.position - self.agent.position
+
+        a = np.arctan2(-r[1], r[0]) - self.agent.angle
+        if a < 0:
+            a = 2 * np.pi + a
+
+        if a < np.pi:
+            angvel = 1
+        elif a > np.pi:
+            angvel = -1
+
+        self.agent.angle += TIMESTEP * 5 * angvel
+        if self.agent.angle > np.pi:
+            self.agent.angle -= 2 * np.pi
+        elif self.agent.angle < -np.pi:
+            self.agent.angle += 2 * np.pi
+
+        velocity = PLAYER_VELOCITY * rotmat(self.agent.angle) @ [1, 0]
+
+        return {
+            self.agent.id: Action(
+                velocity=velocity, target=None, reload=False
             )
         }
 
@@ -102,7 +137,7 @@ class Game:
         self.agents = {enemy.id: enemy for enemy in self.enemies}
         self.agents[self.player.id] = self.player
 
-        self.enemy_policy = DefaultAIPolicy(
+        self.enemy_policy = TagItAIPolicy(
             self.enemies[0].id, self.player.id, self.agents, self.obstacles
         )
 
@@ -147,7 +182,10 @@ class Game:
 
             pygame.display.flip()
         else:
+            # TODO build a semantic map
+            color = self.screen.map_rgb(BACKGROUND_COLOR)
             raw = np.array(pygame.PixelArray(self.screen))
+            print(np.sum(raw == color))
             rgb = np.array([raw >> 16, raw >> 8, raw]) & 0xFF
             rgb = np.moveaxis(rgb, 0, -1)
             return rgb
@@ -299,14 +337,13 @@ class Game:
             elif self.player.angle < -np.pi:
                 self.player.angle += 2 * np.pi
 
-            if np.abs(linvel) > 0:
-                velocity = linvel * PLAYER_VELOCITY * rotmat(self.player.angle) @ [1, 0]
+            velocity = linvel * PLAYER_VELOCITY * rotmat(self.player.angle) @ [1, 0]
 
             # TODO I wonder if the action should just be the command ("go
             # left") rather than the actual velocity vector (the latter has
             # more DOFs than are actually available)
-            # actions = self.enemy_policy.step(TIMESTEP)
-            actions = {}
+            actions = self.enemy_policy.step(TIMESTEP)
+            # actions = {}
             actions[self.player.id] = Action(velocity, target, reload)
 
             self.step(actions)
@@ -362,7 +399,7 @@ class ShootEnv(gym.Env):
 def main():
     pygame.init()
 
-    game = Game(SCREEN_SHAPE)
+    game = Game(SCREEN_SHAPE, display=False)
     game.loop()
 
 

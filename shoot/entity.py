@@ -48,6 +48,7 @@ class Agent(Entity):
 
         # in radians, relative to positive x-axis
         self.angle = angle
+        self.angvel = 0
 
         self.health = MAX_HEALTH
         self.ammo = CLIP_SIZE
@@ -78,8 +79,16 @@ class Agent(Entity):
             self.color,
         )
 
-    def move(self, velocity):
-        self.velocity = self.velocity + velocity
+    # TODO need to deal with world frame
+    def move(self, velocity, angvel=0):
+        self.velocity = self.velocity + PLAYER_VELOCITY * unit(velocity)
+        self.angvel = 5 * unit(angvel)
+
+    def move_local(self, velocity, angvel=0):
+        # convert local velocity to the world frame
+        vel_world = rotmat(self.angle) @ unit(velocity)
+        self.velocity = self.velocity + PLAYER_VELOCITY * vel_world
+        self.angvel = 5 * unit(angvel)
 
     def step(self, dt):
         self.shot_cooldown = max(0, self.shot_cooldown - 1)
@@ -89,8 +98,11 @@ class Agent(Entity):
             self.ammo = CLIP_SIZE
         self.reload_ticks = max(0, self.reload_ticks - 1)
 
+        self.angle = self.angle + dt * self.angvel
         self.position = self.position + dt * self.velocity
+
         self.velocity = np.zeros(2)
+        self.angvel = 0
 
     def reload(self):
         """Reload ammo magazine."""
@@ -137,6 +149,7 @@ class Agent(Entity):
             r = v - self.position
 
             # compute angle and don't wrap it around pi
+            # negative for y is because we are in a left-handed frame
             a = np.arctan2(-r[1], r[0]) - self.angle
             if a < 0:
                 a = 2 * np.pi + a
