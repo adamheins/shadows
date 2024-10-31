@@ -1,13 +1,12 @@
 import numpy as np
 import pygame
 
-from .math import rotmat, orth, unit, wrap_to_pi
+from .math import rotmat, orth, unit, wrap_to_pi, angle2pi
 from .collision import Circle, Segment, line_rect_edge_intersection
-
-# TODO how to handle these constants?
 
 PLAYER_FORWARD_VEL = 200  # px per second
 PLAYER_BACKWARD_VEL = 100  # px per second
+PLAYER_IT_VEL = 150  # px per second
 PLAYER_ANGVEL = 5  # rad per second
 VIEW_ANGLE = np.pi / 3
 
@@ -44,7 +43,7 @@ class Entity:
 
 
 class Agent(Entity):
-    def __init__(self, position, color, angle=0):
+    def __init__(self, position, color, angle=0, it=False):
         super().__init__(position)
 
         self.color = color
@@ -59,31 +58,29 @@ class Agent(Entity):
         self.shot_cooldown = 0
         self.reload_ticks = 0
 
-    @classmethod
-    def player(cls, position):
-        return cls(position, color=PLAYER_COLOR)
+        # "it" in a game of tag
+        self.it = it
+        self.viewtarget = None
 
     @classmethod
-    def enemy(cls, position):
-        return cls(position, color=ENEMY_COLOR)
+    def player(cls, position, it=False):
+        return cls(position, color=PLAYER_COLOR, it=it)
+
+    @classmethod
+    def enemy(cls, position, it=False):
+        return cls(position, color=ENEMY_COLOR, it=it)
 
     def draw(self, surface):
-        pygame.gfxdraw.aacircle(
-            surface,
-            int(self.position[0]),
-            int(self.position[1]),
-            int(self.radius),
-            self.color,
-        )
-        pygame.gfxdraw.filled_circle(
-            surface,
-            int(self.position[0]),
-            int(self.position[1]),
-            int(self.radius),
-            self.color,
-        )
+        if self.it:
+            pygame.draw.circle(surface, (255, 255, 255), self.position, self.radius + 2)
+        pygame.draw.circle(surface, self.color, self.position, self.radius)
+        endpoint = self.position + self.radius * rotmat(self.angle)[:, 0]
+        pygame.draw.line(surface, (0, 0, 0), self.position, endpoint, 3)
 
     def command(self, action):
+        if action.viewtarget is not None:
+            self.viewtarget = action.viewtarget
+
         projectile = None
         if action.target is not None:
             projectile = agent.shoot(action.target)
@@ -91,15 +88,21 @@ class Agent(Entity):
         if action.reload:
             agent.reload()
 
+        # different speed when "it"
+        if self.it:
+            forward_vel = PLAYER_IT_VEL
+        else:
+            forward_vel = PLAYER_FORWARD_VEL
+
         self.angvel = PLAYER_ANGVEL * unit(action.angdir)
         if action.frame == Action.LOCAL:
             if action.lindir[0] >= 0:
-                linvel = PLAYER_FORWARD_VEL * unit(action.lindir)
+                linvel = forward_vel * unit(action.lindir)
             else:
                 linvel = PLAYER_BACKWARD_VEL * unit(action.lindir)
             vel = rotmat(self.angle) @ linvel
         else:
-            vel = PLAYER_FORWARD_VEL * unit(action.lindir)
+            vel = forward_vel * unit(action.lindir)
         self.velocity = vel
 
         return projectile
@@ -136,7 +139,7 @@ class Agent(Entity):
             self.ammo -= 1
             if self.ammo == 0:
                 self.reload()
-            self.velocity -= 0.5 * PLAYER_VELOCITY * direction
+            self.velocity -= PLAYER_BACKWARD_VEL * direction
             return Projectile(
                 position=self.position.copy(),
                 velocity=BULLET_VELOCITY * direction,
@@ -149,9 +152,16 @@ class Agent(Entity):
         """Generate a bounding circle at the agent's current position."""
         return Circle(self.position, self.radius)
 
-    def _compute_view_occlusion(self, screen_rect):
-        vr = rotmat(self.angle + VIEW_ANGLE) @ [1, 0]
-        vl = rotmat(self.angle - VIEW_ANGLE) @ [1, 0]
+    def _compute_view_occlusion(self, screen_rect, viewtarget):
+        if viewtarget is None:
+            angle = self.angle
+        else:
+            # TODO compute angle to viewtarget
+            r = viewtarget - self.position
+            angle = np.arctan2(-r[1], r[0])
+
+        vr = rotmat(angle + VIEW_ANGLE) @ [1, 0]
+        vl = rotmat(angle - VIEW_ANGLE) @ [1, 0]
 
         extra_right = line_rect_edge_intersection(self.position, vr, screen_rect)
         extra_left = line_rect_edge_intersection(self.position, vl, screen_rect)
@@ -162,10 +172,7 @@ class Agent(Entity):
             r = v - self.position
 
             # compute angle and don't wrap it around pi
-            # negative for y is because we are in a left-handed frame
-            a = np.arctan2(-r[1], r[0]) - self.angle
-            if a < 0:
-                a = 2 * np.pi + a
+            a = angle2pi(r, start=angle)
 
             # only consider the vertices *not* in the player's view
             if a >= VIEW_ANGLE and a <= 2 * np.pi - VIEW_ANGLE:
@@ -178,7 +185,9 @@ class Agent(Entity):
         return [self.position, extra_right] + screen_vs + [extra_left]
 
     def draw_view_occlusion(self, surface, screen_rect):
-        ps = self._compute_view_occlusion(screen_rect)
+        if self.it:
+            return
+        ps = self._compute_view_occlusion(screen_rect, viewtarget=None)
         pygame.gfxdraw.aapolygon(surface, ps, (100, 100, 100))
         pygame.gfxdraw.filled_polygon(surface, ps, (100, 100, 100))
 
@@ -208,9 +217,12 @@ class Action:
     WORLD = 0
     LOCAL = 1
 
-    def __init__(self, lindir, angdir=0, target=None, reload=False, frame=WORLD):
+    def __init__(
+        self, lindir, angdir=0, target=None, reload=False, frame=WORLD, viewtarget=None
+    ):
         self.frame = frame
         self.lindir = lindir
         self.angdir = angdir
         self.target = target
         self.reload = reload
+        self.viewtarget = viewtarget
