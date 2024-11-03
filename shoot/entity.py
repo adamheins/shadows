@@ -3,10 +3,12 @@ import pygame
 
 from .math import rotmat, orth, unit, wrap_to_pi, angle2pi
 from .collision import Circle, Segment, line_rect_edge_intersection
+from .gui import Color
 
-PLAYER_FORWARD_VEL = 200  # px per second
-PLAYER_BACKWARD_VEL = 100  # px per second
-PLAYER_IT_VEL = 150  # px per second
+
+PLAYER_FORWARD_VEL = 150  # px per second
+PLAYER_BACKWARD_VEL = 50  # px per second
+PLAYER_IT_VEL = 100  # px per second
 PLAYER_ANGVEL = 5  # rad per second
 VIEW_ANGLE = np.pi / 3
 
@@ -15,12 +17,8 @@ BULLET_VELOCITY = 500
 SHOT_COOLDOWN_TICKS = 20
 RELOAD_TICKS = 120
 
-PROJECTILE_COLOR = (0, 0, 0)
 PROJECTILE_RADIUS = 3
-
-PLAYER_COLOR = (255, 0, 0)
-ENEMY_COLOR = (0, 0, 255)
-AGENT_RADIUS = 10
+AGENT_RADIUS = 5
 
 CLIP_SIZE = 1
 MAX_HEALTH = 1
@@ -64,18 +62,24 @@ class Agent(Entity):
 
     @classmethod
     def player(cls, position, it=False):
-        return cls(position, color=PLAYER_COLOR, it=it)
+        return cls(position, color=Color.PLAYER, it=it)
 
     @classmethod
     def enemy(cls, position, it=False):
-        return cls(position, color=ENEMY_COLOR, it=it)
+        return cls(position, color=Color.ENEMY, it=it)
+
+    def rotmat(self):
+        return rotmat(self.angle)
+
+    def direction(self):
+        return self.rotmat()[:, 0]
 
     def draw(self, surface):
         if self.it:
             pygame.draw.circle(surface, (255, 255, 255), self.position, self.radius + 2)
         pygame.draw.circle(surface, self.color, self.position, self.radius)
         endpoint = self.position + self.radius * rotmat(self.angle)[:, 0]
-        pygame.draw.line(surface, (0, 0, 0), self.position, endpoint, 3)
+        pygame.draw.line(surface, (0, 0, 0), self.position, endpoint, 1)
 
     def command(self, action):
         if action.viewtarget is not None:
@@ -188,8 +192,9 @@ class Agent(Entity):
         if self.it:
             return
         ps = self._compute_view_occlusion(screen_rect, viewtarget=None)
-        pygame.gfxdraw.aapolygon(surface, ps, (100, 100, 100))
-        pygame.gfxdraw.filled_polygon(surface, ps, (100, 100, 100))
+        pygame.draw.polygon(surface, Color.SHADOW, ps)
+        # pygame.gfxdraw.aapolygon(surface, ps, Color.SHADOW)
+        # pygame.gfxdraw.filled_polygon(surface, ps, Color.SHADOW)
 
 
 class Projectile(Entity):
@@ -198,7 +203,7 @@ class Projectile(Entity):
     def __init__(self, position, velocity, agent_id):
         super().__init__(position, velocity)
         self.agent_id = agent_id
-        self.color = PROJECTILE_COLOR
+        self.color = Color.PROJECTILE
         self.radius = PROJECTILE_RADIUS
 
     def draw(self, surface):

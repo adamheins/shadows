@@ -8,8 +8,7 @@ import gymnasium as gym
 from shoot import *
 
 
-SCREEN_SHAPE = (500, 500)
-BACKGROUND_COLOR = (219, 200, 184)
+SCREEN_SHAPE = (200, 200)
 
 FRAMERATE = 60
 TIMESTEP = 1.0 / FRAMERATE
@@ -25,12 +24,10 @@ class TagItAIPolicy:
         self.agents = agents
         self.obstacles = obstacles
 
-    def step(self, dt):
-        if not self.agent.it:
-            return {}  # do nothing
-
+    def _it_policy(self):
         r = self.player.position - self.agent.position
 
+        # steer toward the player
         a = angle2pi(r, start=self.agent.angle)
         if a < np.pi:
             angvel = 1
@@ -47,13 +44,54 @@ class TagItAIPolicy:
             )
         }
 
+    def _not_it_policy(self):
+        r = self.player.position - self.agent.position
+        d = self.agent.direction()
+
+        if d @ r < 0: # or d @ self.player.direction() < 0:
+            # we are already facing away from the player, so take whichever
+            # direction orthogonal to center point moves us farther away from
+            # the player
+            p = self.agent.position - 0.5 * np.array(SCREEN_SHAPE)
+            v = orth(p)
+            if v @ r > 0:
+                v = -v
+            a = angle2pi(v, start=self.agent.angle)
+            if a < np.pi:
+                angvel = 1
+            elif a > np.pi:
+                angvel = -1
+        else:
+            # steer away from the player
+            a = angle2pi(r, start=self.agent.angle)
+            if a < np.pi:
+                angvel = -1
+            elif a > np.pi:
+                angvel = 1
+
+        return {
+            self.agent.id: Action(
+                lindir=[1, 0],
+                angdir=angvel,
+                target=None,
+                reload=False,
+                frame=Action.LOCAL,
+            )
+        }
+
+    def compute(self):
+        if self.agent.it:
+            return self._it_policy()
+        return self._not_it_policy()
+
+
 
 class TagGame:
     def __init__(self, shape, display=True):
         self.display = display
 
         if self.display:
-            self.screen = pygame.display.set_mode(shape)
+            self.screen = pygame.display.set_mode(shape, flags=pygame.SCALED)
         else:
             self.screen = pygame.Surface(shape)
         self.clock = pygame.time.Clock()
@@ -71,12 +109,12 @@ class TagGame:
         #     Obstacle(250, 380, 200, 40),
         # ]
         self.obstacles = [
-            Obstacle(200, 200, 100, 100),
+            Obstacle(75, 75, 50, 50),
         ]
 
         # player and enemy agents
-        self.player = Agent.player(position=[100, 100])
-        self.enemies = [Agent.enemy(position=[400, 400], it=True)]
+        self.player = Agent.player(position=[50, 50])
+        self.enemies = [Agent.enemy(position=[150, 150], it=True)]
         self.agents = [self.player] + self.enemies
 
         # id of the agent that is "it"
@@ -88,7 +126,7 @@ class TagGame:
         )
 
     def draw(self):
-        self.screen.fill(BACKGROUND_COLOR)
+        self.screen.fill(Color.BACKGROUND)
 
         for enemy in self.enemies:
             enemy.draw(self.screen)
@@ -109,10 +147,8 @@ class TagGame:
         if self.display:
             pygame.display.flip()
         else:
-            # TODO build a semantic map
-            color = self.screen.map_rgb(BACKGROUND_COLOR)
+            # extract the screen image
             raw = np.array(pygame.PixelArray(self.screen))
-            print(np.sum(raw == color))
             rgb = np.array([raw >> 16, raw >> 8, raw]) & 0xFF
             rgb = np.moveaxis(rgb, 0, -1)
             return rgb
@@ -197,7 +233,7 @@ class TagGame:
             if pygame.K_s in self.keys_down:
                 lindir -= 1
 
-            actions = self.enemy_policy.step(TIMESTEP)
+            actions = self.enemy_policy.compute()
             # actions = {}
             actions[self.player.id] = Action(
                 lindir=[lindir, 0],
@@ -213,31 +249,24 @@ class TagGame:
             self.clock.tick(FRAMERATE)
 
 
-class ShootEnv(gym.Env):
+# TODO perhaps we want to have separate envs for it and not it
+class TagEnv(gym.Env):
     def __init__(self, shape):
-        self.game = Game(shape, display=False)
+        self.game = TagGame(shape, display=False)
 
         # get enemy id
         self.agent_id = self.game.enemies[0].id
 
+        # directions to move
         self.action_space = gym.spaces.Dict(
             {
-                "direction": gym.spaces.Discrete(8),
-                "target": gym.spaces.Box(low=[0, 0], high=shape, dtype=np.float32),
-                "reload": gym.spaces.MultiBinary(1),
+                "lindir": gym.spaces.Discrete(3),
+                "angdir": gym.spaces.Discrete(3),
             }
         )
 
-        # semantically labelled pixels
-        self.observation_space = gym.spaces.Dict(
-            {
-                "health": gym.spaces.Box(low=1, high=5, dtype=np.uint8),
-                "ammo": gym.spaces.Box(low=0, high=20, dtype=np.uint8),
-                "field": gym.spaces.Box(
-                    low=np.zeros(shape), high=6 * np.ones(shape), dtype=np.uint8
-                ),
-            }
-        )
+        # RGB pixels
+        self.observation_space = gym.spaces.Box(0, 255, (shape + (3,)), dtype=np.uint8)
 
     def reset(self, seed=None):
         # reset the game environment

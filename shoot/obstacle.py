@@ -3,16 +3,13 @@ import pygame
 
 from .math import orth, unit
 from .collision import AARect, line_rect_edge_intersection
-
-
-OBSTACLE_COLOR = (0, 0, 0)
-SHADOW_COLOR = (100, 100, 100)
+from .gui import Color
 
 
 class Obstacle(AARect):
     def __init__(self, x, y, w, h):
         super().__init__(x, y, w, h)
-        self.color = OBSTACLE_COLOR
+        self.color = Color.OBSTACLE
         self.pygame_rect = pygame.Rect(x, y, w, h)
 
     def _compute_witness_vertices(self, point, tol=1e-3):
@@ -82,5 +79,6 @@ class Obstacle(AARect):
 
     def draw_occlusion(self, surface, viewpoint, screen_rect):
         ps = self._compute_occlusion(viewpoint, screen_rect)
-        pygame.gfxdraw.aapolygon(surface, ps, SHADOW_COLOR)
-        pygame.gfxdraw.filled_polygon(surface, ps, SHADOW_COLOR)
+        pygame.draw.polygon(surface, Color.SHADOW, ps)
+        # pygame.gfxdraw.aapolygon(surface, ps, Color.SHADOW)
+        # pygame.gfxdraw.filled_polygon(surface, ps, Color.SHADOW)

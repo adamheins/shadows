@@ -1,3 +1,10 @@
+class Color:
+    BACKGROUND = (219, 200, 184)
+    SHADOW = (100, 100, 100)
+    PROJECTILE = (0, 0, 0)
+    PLAYER = (255, 0, 0)
+    ENEMY = (0, 0, 255)
+    OBSTACLE = SHADOW
 
 
 class Text:
@@ -32,5 +39,3 @@ class Text:
     def draw(self, surface):
         """Draw the text on the surface."""
         surface.blit(self.image, self.position)
-
-
