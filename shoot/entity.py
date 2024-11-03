@@ -58,7 +58,7 @@ class Agent(Entity):
 
         # "it" in a game of tag
         self.it = it
-        self.viewtarget = None
+        self.lookback = False
 
     @classmethod
     def player(cls, position, it=False):
@@ -82,8 +82,7 @@ class Agent(Entity):
         pygame.draw.line(surface, (0, 0, 0), self.position, endpoint, 1)
 
     def command(self, action):
-        if action.viewtarget is not None:
-            self.viewtarget = action.viewtarget
+        self.lookback = action.lookback
 
         projectile = None
         if action.target is not None:
@@ -96,7 +95,10 @@ class Agent(Entity):
         if self.it:
             forward_vel = PLAYER_IT_VEL
         else:
-            forward_vel = PLAYER_FORWARD_VEL
+            if action.lookback:
+                forward_vel = PLAYER_BACKWARD_VEL
+            else:
+                forward_vel = PLAYER_FORWARD_VEL
 
         self.angvel = PLAYER_ANGVEL * unit(action.angdir)
         if action.frame == Action.LOCAL:
@@ -156,13 +158,11 @@ class Agent(Entity):
         """Generate a bounding circle at the agent's current position."""
         return Circle(self.position, self.radius)
 
-    def _compute_view_occlusion(self, screen_rect, viewtarget):
-        if viewtarget is None:
-            angle = self.angle
+    def _compute_view_occlusion(self, screen_rect):
+        if self.lookback:
+            angle = wrap_to_pi(self.angle + np.pi)
         else:
-            # TODO compute angle to viewtarget
-            r = viewtarget - self.position
-            angle = np.arctan2(-r[1], r[0])
+            angle = self.angle
 
         vr = rotmat(angle + VIEW_ANGLE) @ [1, 0]
         vl = rotmat(angle - VIEW_ANGLE) @ [1, 0]
@@ -191,7 +191,7 @@ class Agent(Entity):
     def draw_view_occlusion(self, surface, screen_rect):
         if self.it:
             return
-        ps = self._compute_view_occlusion(screen_rect, viewtarget=None)
+        ps = self._compute_view_occlusion(screen_rect)
         pygame.draw.polygon(surface, Color.SHADOW, ps)
         # pygame.gfxdraw.aapolygon(surface, ps, Color.SHADOW)
         # pygame.gfxdraw.filled_polygon(surface, ps, Color.SHADOW)
@@ -223,11 +223,11 @@ class Action:
     LOCAL = 1
 
     def __init__(
-        self, lindir, angdir=0, target=None, reload=False, frame=WORLD, viewtarget=None
+        self, lindir, angdir=0, target=None, reload=False, frame=WORLD, lookback=False
     ):
         self.frame = frame
         self.lindir = lindir
         self.angdir = angdir
         self.target = target
         self.reload = reload
-        self.viewtarget = viewtarget
+        self.lookback = lookback

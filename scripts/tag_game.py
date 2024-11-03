@@ -209,7 +209,6 @@ class TagGame:
         while True:
 
             # process events
-            viewtarget = None
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
@@ -218,8 +217,6 @@ class TagGame:
                     self.keys_down.add(event.key)
                 elif event.type == pygame.KEYUP:
                     self.keys_down.discard(event.key)
-                # elif event.type == pygame.MOUSEMOTION:
-                #     viewtarget = pygame.mouse.get_pos()
 
             # respond to events
             lindir = 0
@@ -233,6 +230,8 @@ class TagGame:
             if pygame.K_s in self.keys_down:
                 lindir -= 1
 
+            lookback = pygame.K_SPACE in self.keys_down
+
             actions = self.enemy_policy.compute()
             # actions = {}
             actions[self.player.id] = Action(
@@ -241,7 +240,7 @@ class TagGame:
                 target=None,
                 reload=False,
                 frame=Action.LOCAL,
-                viewtarget=viewtarget,
+                lookback=lookback,
             )
 
             self.step(actions)
