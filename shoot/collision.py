@@ -75,8 +75,6 @@ def line_rect_edge_intersection(p, v, rect):
     return p + t * v
 
 
-
-
 def point_in_rect(point, rect):
     """True if the rectangle contains the point, False otherwise."""
     x, y = point
@@ -200,6 +198,10 @@ def segment_rect_intersect(segment, rect):
 
 
 def segment_rect_intersect_dist(segment, rect):
+    """Distance along the segment at which it intersects with the rectangle.
+
+    The segment and rectangle must be intersecting.
+    """
     if point_in_rect(segment.s1, rect):
         return 0
     min_dist = np.inf
@@ -207,4 +209,15 @@ def segment_rect_intersect_dist(segment, rect):
         d = segment_segment_intersect_dist(segment, seg)
         if d is not None:
             min_dist = min(d, min_dist)
+    return min_dist
+
+
+def point_rect_dist(point, rect):
+    """Distance between a point and a rectangle."""
+    if point_in_rect(point, rect):
+        return 0
+    min_dist = np.inf
+    for seg in rect.segments:
+        d = point_segment_dist(point, seg)
+        min_dist = min(d, min_dist)
     return min_dist
