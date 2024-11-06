@@ -6,13 +6,17 @@ from .math import unit, orth, quad_formula
 # TODO bring this back again?
 class CollisionQuery:
     def __init__(
-        self, distance=None, time=None, normal=None, point=None, intersect=False
+        self, distance=None, time=None, normal=None, p1=None, p2=None, intersect=False
     ):
-        self.point = point
+        self.p1 = p1
+        self.p2 = p2
         self.normal = normal
         self.distance = distance
         self.time = time
         self.intersect = intersect
+
+    def __repr__(self):
+        return f"CollisionQuery(distance={self.distance}, time={self.time}, normal={self.normal}, p1={self.p1}, p2={self.p2}, intersect={self.intersect})"
 
 
 # TODO
@@ -118,160 +122,189 @@ def point_in_poly(point, poly, tol=1e-8):
     """True if the polygon contains the point, False otherwise."""
     for v, n in zip(poly.vertices, poly.in_normals):
         if (point - v) @ n < -tol:
-            return CollisionQuery(intersect=False)
-    return CollisionQuery(intersect=True)
+            return False
+    return True
 
 
 def point_in_rect(point, rect):
     """Specialized version for rectangles."""
     x, y = point
-    intersect = (
-        x >= rect.x and x <= rect.x + rect.w and y >= rect.y and y <= rect.y + rect.h
-    )
-    return CollisionQuery(intersect=intersect)
+    return x >= rect.x and x <= rect.x + rect.w and y >= rect.y and y <= rect.y + rect.h
 
 
-def point_segment_dist(point, segment):
-    """Distance between a point and a line segment."""
+def point_circle_query(point, circle):
+    """Collision query between a point and a circle."""
+    d = np.linalg.norm(segment.start - circle.center) - circle.radius
+    n = unit(point - circle.center)
+
+    # the point is inside the circle
+    if d <= 0:
+        return CollisionQuery(distance=0, p1=point, p2=point, normal=n, intersect=True)
+
+    p2 = circle.center + circle.radius * n
+    return CollisionQuery(distance=d, p1=point, p2=p2, normal=n, intersect=False)
+
+
+def point_segment_query(point, segment):
+    """Collision query between a point and a line segment."""
     q = np.array(segment.start - point)
 
     t = -(q @ segment.v) / (segment.v @ segment.v)
     if t >= 0 and t <= 1:
         r = segment.start + t * segment.v
-        return np.linalg.norm(point - r)
+        d = np.linalg.norm(point - r)
+        intersect = np.isclose(d, 0)
+        return CollisionQuery(distance=d, p1=point, p2=r, intersect=intersect)
+        # return np.linalg.norm(point - r)
     d1 = np.linalg.norm(point - segment.start)
     d2 = np.linalg.norm(point - segment.end)
-    return min(d1, d2)
+    if d1 < d2:
+        return CollisionQuery(distance=d1, p1=point, p2=segment.start)
+    return CollisionQuery(distance=d2, p1=point, p2=segment.end)
 
 
-def segment_circle_intersect(segment, circle):
-    """True if circle and line segment intersect, False otherwise."""
-    return point_segment_dist(circle.center, segment) <= circle.radius
+def point_poly_query(point, poly):
+    """Collision query between a point and a polygon."""
+    min_depth = np.inf
+    normal = None
+    for v, n in zip(poly.vertices, poly.in_normals):
+        depth = (point - v) @ n
+        if depth < min_depth:
+            min_depth = depth
+            normal = -n
+
+    # depth must be non-negative for all normals for point to be inside the
+    # polygon
+    if min_depth >= 0:
+        return CollisionQuery(
+            distance=0, p1=point, p2=point, normal=normal, intersect=True
+        )
+
+    # otherwise the point is outside the polygon
+    # return the query for the closest edge
+    min_dist_query = point_segment_query(point, poly.edges[0])
+    for edge in poly.edges[1:]:
+        Q = point_segment_query(point, edge)
+        if Q.distance < min_dist_query.distance:
+            Q.normal = unit(point - Q.p2)
+            min_dist_query = Q
+    return min_dist_query
 
 
-def segment_circle_intersect_time(segment, circle):
-    # the segment starts in the circle already
+def segment_circle_query(segment, circle):
+    Qc = point_segment_query(circle.center, segment)
+    normal = unit(Qc.p2 - circle.center)
+
+    # segment and circle do not intersect
+    if Qc.distance >= circle.radius:
+        p2 = circle.center + circle.radius * normal
+        d = Qc.distance - circle.radius
+        return CollisionQuery(
+            distance=d, p1=Qc.p2, p2=p2, normal=normal, intersect=False
+        )
+
+    # segment and circle intersect
     if np.linalg.norm(segment.start - circle.center) <= circle.radius:
-        return 0
+        # if the segment starts inside the circle, the time is 0
+        t = 0
+    else:
+        q = segment.start - circle.center
+        v = segment.v
 
-    q = segment.start - circle.center
-    v = segment.v
+        a = v @ v
+        b = 2 * q @ v
+        c = q @ q - circle.radius**2
+        ts = quad_formula(a, b, c)
+        t = np.min(ts)
 
-    a = v @ v
-    b = 2 * q @ v
-    c = q @ q - circle.radius**2
-    ts = quad_formula(a, b, c)
-    return np.min(ts)
-
-
-def segment_segment_dist(segment1, segment2):
-    """Distance between two line segments."""
-    # TODO I think this function could be simplified
-    # Q = CollisionQuery()
-
-    # segments are parallel
-    if np.isclose(segment1.normal @ segment2.v, 0):
-        separation = np.abs(segment1.normal @ (segment2.start - segment1.start))
-
-        # if one of the end points of the second segment lies in the first,
-        # then the distance is just the separation between them
-        direction = segment1.direction
-        p0 = segment1.start
-        if 0 <= (segment2.start - p0) @ direction <= segment1.v @ direction:
-            return separation
-        if 0 <= (segment2.end - p0) @ direction <= segment1.v @ direction:
-            return separation
-
-        # otherwise the closest distance is between a pair of endpoints
-        deltas = [
-            segment1.start - segment2.start,
-            segment1.start - segment2.end,
-            segment1.end - segment2.start,
-            segment1.end - segment2.end,
-        ]
-        return np.min([np.linalg.norm(delta) for delta in deltas])
-
-    v1 = segment1.v
-    v2 = segment2.v
-    d = segment1.start - segment2.start
-
-    # determine the intersection point for the infinite lines
-    A = np.array([[-v1 @ v1, v1 @ v2], [-v1 @ v2, v2 @ v2]])
-    b = np.array([v1 @ d, v2 @ d])
-    t = np.linalg.solve(A, b)
-
-    c1 = 0 <= t[0] <= 1
-    c2 = 0 <= t[1] <= 1
-
-    # line segments actually intersect
-    if c1 and c2:
-        return 0
-        # Q.d = 0
-        # Q.intersect = True
-        # Q.t = t[0]
-        # Q.p = segment1.start + t[0] * segment1.v
-        # return Q
-
-    # intersection is outside segment2 but not segment1: closest point must be
-    # an endpoint of segment2
-    elif c1 and not c2:
-        if t[1] > 1:
-            return point_segment_dist(segment2.end, segment1)
-        return point_segment_dist(segment2.start, segment1)
-
-    # opposite of above
-    elif c2 and not c1:
-        if t[0] > 1:
-            return point_segment_dist(segment1.end, segment2)
-        return point_segment_dist(segment1.start, segment2)
-
-    # otherwise the closest distance is between a pair of endpoints
-    deltas = [
-        segment1.start - segment2.start,
-        segment1.start - segment2.end,
-        segment1.end - segment2.start,
-        segment1.end - segment2.end,
-    ]
-    return np.min([np.linalg.norm(delta) for delta in deltas])
+    return CollisionQuery(
+        distance=0, p1=Qc.p2, p2=Qc.p2, normal=normal, time=t, intersect=True
+    )
 
 
-def segment_segment_intersect_time(segment1, segment2, tol=1e-8):
-    # parallel
-    if np.isclose(segment1.normal @ segment2.v, 0):
+# def segment_circle_intersect(segment, circle):
+#     """True if circle and line segment intersect, False otherwise."""
+#     return point_segment_dist(circle.center, segment).distance <= circle.radius
+#
+#
+# def segment_circle_intersect_time(segment, circle):
+#     # the segment starts in the circle already
+#     if np.linalg.norm(segment.start - circle.center) <= circle.radius:
+#         return 0
+#
+#     q = segment.start - circle.center
+#     v = segment.v
+#
+#     a = v @ v
+#     b = 2 * q @ v
+#     c = q @ q - circle.radius**2
+#     ts = quad_formula(a, b, c)
+#     return np.min(ts)
 
-        # check if they live along the same line
-        # if so, they could still intersect
-        separation = segment1.normal @ (segment2.start - segment1.start)
-        if not abs(separation) < tol:
-            return None
 
+def _segments_are_parallel(segment1, segment2):
+    return np.isclose(segment1.normal @ segment2.v, 0)
+
+
+def segment_segment_query(segment1, segment2):
+    if not _segments_are_parallel(segment1, segment2):
+        v1 = segment1.v
+        v2 = segment2.v
+        d = segment1.start - segment2.start
+
+        # determine the intersection point for the infinite lines
+        A = np.array([[-v1 @ v1, v1 @ v2], [-v1 @ v2, v2 @ v2]])
+        b = np.array([v1 @ d, v2 @ d])
+        t = np.linalg.solve(A, b)
+
+        # line segments actually intersect, so we are down
+        if 0 <= t[0] <= 1 and 0 <= t[1] <= 1:
+            p = segment1.start + t[0] * segment1.v
+            return CollisionQuery(distance=0, p1=p, p2=p, time=t[0], intersect=True)
+    elif np.isclose(segment1.normal @ (segment2.start - segment1.start), 0):
+        # parallel and along the same line
         direction = segment1.direction
         p0 = segment1.start
         t1 = ((segment2.start - p0) @ direction) / (segment1.v @ direction)
         t2 = ((segment2.end - p0) @ direction) / (segment1.v @ direction)
 
+        t = None
         if 0 <= t1 <= 1 and 0 <= t2 <= 1:
-            return min(t1, t2)
+            t = min(t1, t2)
+            p = segment2.start
         elif 0 <= t1 <= 1:
-            return t1
+            t = t1
+            p = segment2.start
         elif 0 <= t2 <= 1:
-            return t2
-        return None
+            t = t2
+            p = segment2.end
 
-    v1 = segment1.v
-    v2 = segment2.v
-    d = segment1.start - segment2.start
+        if t is not None:
+            return CollisionQuery(distance=0, p1=p, p2=p, time=t, intersect=True)
 
-    # determine the intersection point for the infinite lines
-    A = np.array([[-v1 @ v1, v1 @ v2], [-v1 @ v2, v2 @ v2]])
-    b = np.array([v1 @ d, v2 @ d])
-    t = np.linalg.solve(A, b)
+    # if the lines are not parallel and/or do not intersect, then at least one
+    # of the closest points must be an endpoint: check all four
+    min_dist_query = point_segment_query(segment1.start, segment2)
 
-    c1 = 0 <= t[0] <= 1
-    c2 = 0 <= t[1] <= 1
-    if c1 and c2:
-        return t[0]
-    return None
+    Q = point_segment_query(segment1.end, segment2)
+    if Q.distance < min_dist_query.distance:
+        min_dist_query = Q
+
+    Q = point_segment_query(segment2.start, segment1)
+    if Q.distance < min_dist_query.distance:
+        Q.p1, Q.p2 = Q.p2, Q.p1
+        min_dist_query = Q
+
+    Q = point_segment_query(segment2.end, segment1)
+    if Q.distance < min_dist_query.distance:
+        Q.p1, Q.p2 = Q.p2, Q.p1
+        min_dist_query = Q
+
+    return min_dist_query
+
+
+def segment_poly_query(segment, poly):
+    pass
 
 
 def segment_poly_intersect(segment, poly):
@@ -291,30 +324,18 @@ def segment_poly_intersect_time(segment, poly):
 
     Returns None if the segment and rectangle are not intersecting.
     """
-    if point_in_poly(segment.start, poly).intersect:
+    if point_in_poly(segment.start, poly):
         return 0
 
     min_time = None
     for edge in poly.edges:
-        t = segment_segment_intersect_time(segment, edge)
+        t = segment_segment_query(segment, edge).time
         if t is not None:
             if min_time is None:
                 min_time = t
             else:
                 min_time = min(t, min_time)
     return min_time
-
-
-def point_poly_dist(point, poly):
-    """Minimum distance between a point and a polygon."""
-    if point_in_poly(point, poly).intersect:
-        return 0
-
-    min_dist = np.inf
-    for edge in poly.edges:
-        d = point_segment_dist(point, edge)
-        min_dist = min(d, min_dist)
-    return min_dist
 
 
 def segment_poly_dist(segment, poly):
@@ -326,7 +347,7 @@ def segment_poly_dist(segment, poly):
     # otherwise we just need to consider each edge
     min_dist = np.inf
     for edge in poly.edges:
-        d = segment_segment_dist(segment, edge)
+        d = segment_segment_query(segment, edge).distance
         min_dist = min(d, min_dist)
     return min_dist
 
