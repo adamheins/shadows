@@ -1,3 +1,11 @@
+== Setup ==
+Setup Python 3.9:
+```
+pyenv install 3.9
+pyenv local 3.9
+poetry env use 3.9
+```
+
 == Goal ==
 * Simple game with AI-trained opponent
 * Ideally, I could get this running in the browser for super easy sharing

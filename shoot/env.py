@@ -2,7 +2,7 @@ import pygame
 import numpy as np
 import gymnasium as gym
 
-from .collision import point_rect_dist
+from .collision import point_poly_dist
 from .entity import Action
 from .taggame import TagGame
 
@@ -72,7 +72,7 @@ class TagItEnv(gym.Env):
                 agent.position = self.np_random.uniform(self.game.shape)
                 agent.angle = self.np_random.uniform(-np.pi, np.pi)
                 for obstacle in self.game.obstacles:
-                    if point_rect_dist(p, obstacle) <= agent.radius:
+                    if point_poly_dist(p, obstacle) <= agent.radius:
                         continue
 
         # reset who is it

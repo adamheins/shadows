@@ -208,12 +208,32 @@ class TagGame:
             # don't walk into an obstacle
             # TODO ideally we'd only cut off the portion of the normal velocity
             # before collision - need a swept circle/rect intersection
+            # if np.linalg.norm(v) > 0:
+            #     for obstacle in self.obstacles:
+            #         n = obstacle.compute_collision_normal(agent.position, agent.radius)
+            #         if n is not None and n @ v < 0:
+            #             t = orth(n)
+            #             v = (t @ v) * t
+
+            # TODO this is broken, but not sure why
             if np.linalg.norm(v) > 0:
+                path = Segment(agent.position, agent.position + TIMESTEP * v)
+                min_time = None
+                normal = None
                 for obstacle in self.obstacles:
-                    n = obstacle.compute_collision_normal(agent.position, agent.radius)
-                    if n is not None and n @ v < 0:
-                        t = orth(n)
-                        v = (t @ v) * t
+
+                    # collision time and normal
+                    t, n = swept_circle_poly_intersect_time(path, agent.radius, obstacle)
+                    if t is not None and (min_time is None or t < min_time):
+                        min_time = t
+                        normal = n
+
+                # tangent velocity
+                if min_time is not None:
+                    print(min_time)
+                    tan = orth(normal)
+                    vtan = (tan @ v) * tan
+                    v = min_time * v + (1 - min_time) * vtan
 
             agent.velocity = v
 
@@ -267,8 +287,8 @@ class TagGame:
 
             lookback = pygame.K_SPACE in self.keys_down
 
-            actions = self.enemy_policy.compute()
-            # actions = {}
+            # actions = self.enemy_policy.compute()
+            actions = {}
             actions[self.player.id] = Action(
                 lindir=[lindir, 0],
                 angdir=angdir,

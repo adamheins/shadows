@@ -39,6 +39,9 @@ class Entity:
         self.id = Entity._current_id
         Entity._current_id += 1
 
+    def path(self, dt):
+        return Segment(start=self.position, end=self.position + dt * self.velocity)
+
 
 class Agent(Entity):
     def __init__(self, position, color, angle=0, it=False):
@@ -76,10 +79,10 @@ class Agent(Entity):
 
     def draw(self, surface):
         if self.it:
-            pygame.draw.circle(surface, (255, 255, 255), self.position, self.radius + 2)
+            pygame.draw.circle(surface, Color.OUTLINE, self.position, self.radius + 2)
         pygame.draw.circle(surface, self.color, self.position, self.radius)
         endpoint = self.position + self.radius * rotmat(self.angle)[:, 0]
-        pygame.draw.line(surface, (0, 0, 0), self.position, endpoint, 1)
+        pygame.draw.line(surface, Color.DIRECTION, self.position, endpoint, 1)
 
     def command(self, action):
         self.lookback = action.lookback
@@ -156,7 +159,7 @@ class Agent(Entity):
 
     def circle(self):
         """Generate a bounding circle at the agent's current position."""
-        return Circle(self.position, self.radius)
+        return Circle(center=self.position, radius=self.radius)
 
     def _compute_view_occlusion(self, screen_rect):
         if self.lookback:
@@ -208,9 +211,6 @@ class Projectile(Entity):
 
     def draw(self, surface):
         pygame.draw.circle(surface, self.color, self.position, self.radius)
-
-    def path(self, dt):
-        return Segment(self.position, self.position + dt * self.velocity)
 
     def step(self, dt):
         self.position += dt * self.velocity
