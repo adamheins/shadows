@@ -206,6 +206,8 @@ class TagGame:
                 v[1] = max(0, v[1])
 
             # don't walk into an obstacle
+            # TODO ideally we'd only cut off the portion of the normal velocity
+            # before collision - need a swept circle/rect intersection
             if np.linalg.norm(v) > 0:
                 for obstacle in self.obstacles:
                     n = obstacle.compute_collision_normal(agent.position, agent.radius)

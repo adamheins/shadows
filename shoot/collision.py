@@ -1,6 +1,15 @@
 import numpy as np
 
-from .math import unit, orth
+from .math import unit, orth, quad_formula
+
+
+class CollisionQuery:
+    def __init__(self, d=None, t=None, n=None, p=None, intersect=False):
+        self.p = p  # collision point
+        self.d = d  # actual distance
+        self.t = t  # distance along the line
+        self.n = n  # contact normal
+        self.intersect = intersect  # whether shapes intersect
 
 
 class AARect:
@@ -28,6 +37,7 @@ class Segment:
         self.s2 = np.array(s2)
 
         self.v = self.s2 - self.s1
+        self.direction = unit(self.v)
         self.normal = unit(orth(self.v))
 
 
@@ -94,17 +104,12 @@ def point_segment_dist(point, segment):
     return min(d1, d2)
 
 
-def circle_segment_intersect(circle, segment):
+def segment_circle_intersect(segment, circle):
     """True if circle and line segment intersect, False otherwise."""
     return point_segment_dist(circle.c, segment) <= circle.r
 
 
-def _quad_formula(a, b, c):
-    d = np.sqrt(b**2 - 4 * a * c)
-    return (-b - d) / (2 * a), (-b + d) / (2 * a)
-
-
-def circle_segment_intersect_dist(circle, segment):
+def segment_circle_intersect_time(segment, circle):
     # the segment starts in the circle already
     if np.linalg.norm(segment.s1 - circle.c) <= circle.r:
         return 0
@@ -114,16 +119,21 @@ def circle_segment_intersect_dist(circle, segment):
 
     a = v @ v
     b = 2 * q @ v
-    c = q @ q - circle.r**2
-    ts = _quad_formula(a, b, c)
+    c = q @ q - circle.r ** 2
+    ts = quad_formula(a, b, c)
     return np.min(ts)
 
 
 def segment_segment_dist(segment1, segment2):
     """Distance between two line segments."""
+    Q = CollisionQuery()
+
     # segments are parallel
     if np.isclose(segment1.normal @ segment2.v, 0):
         return np.abs(segment1.normal @ (segment2.s1 - segment1.s1))
+        # Q.d = np.abs(segment1.normal @ (segment2.s1 - segment1.s1))
+        # Q.intersect = False
+        # return Q
 
     v1 = segment1.v
     v2 = segment2.v
@@ -140,6 +150,11 @@ def segment_segment_dist(segment1, segment2):
     # line segments actually intersect
     if c1 and c2:
         return 0
+        # Q.d = 0
+        # Q.intersect = True
+        # Q.t = t[0]
+        # Q.p = segment1.s1 + t[0] * segment1.v
+        # return Q
 
     # intersection is outside segment2 but not segment1: closest point must be
     # an endpoint of segment2
@@ -164,9 +179,21 @@ def segment_segment_dist(segment1, segment2):
     return np.min([np.linalg.norm(delta) for delta in deltas])
 
 
-def segment_segment_intersect_dist(segment1, segment2):
+def segment_segment_intersect_time(segment1, segment2):
     # parallel
+    # TODO they could overlap
     if np.isclose(segment1.normal @ segment2.v, 0):
+
+        # check if they live along the same line
+        # if so, they could still intersect
+        separation = segment1.normal @ (segment2.s1 - segment1.s1)
+        if not np.isclose(separation, 0):
+            return None
+
+        t1 = (segment1.s1 - segment2.s1) @ segment1.direction
+        if t1 > 1:
+            pass
+
         return None
 
     v1 = segment1.v
@@ -197,7 +224,7 @@ def segment_rect_intersect(segment, rect):
     return True
 
 
-def segment_rect_intersect_dist(segment, rect):
+def segment_rect_intersect_time(segment, rect):
     """Distance along the segment at which it intersects with the rectangle.
 
     The segment and rectangle must be intersecting.
@@ -206,7 +233,7 @@ def segment_rect_intersect_dist(segment, rect):
         return 0
     min_dist = np.inf
     for seg in rect.segments:
-        d = segment_segment_intersect_dist(segment, seg)
+        d = segment_segment_intersect_time(segment, seg)
         if d is not None:
             min_dist = min(d, min_dist)
     return min_dist
@@ -221,3 +248,49 @@ def point_rect_dist(point, rect):
         d = point_segment_dist(point, seg)
         min_dist = min(d, min_dist)
     return min_dist
+
+
+def segment_rect_dist(segment, rect):
+    """Distance between a segment and a rectangle."""
+    if segment_rect_intersect(segment, rect):
+        return 0
+    min_dist = np.inf
+    for seg in rect.segments:
+        d = segment_segment_dist(segment, seg)
+        min_dist = min(d, min_dist)
+    return min_dist
+
+
+def swept_circle_rect_intersect(segment, radius, rect):
+    """Check if a circle swept along a segment intersects a rectangle."""
+    return segment_rect_dist(segment, rect) < radius
+
+
+def swept_circle_rect_intersect_time(segment, radius, rect):
+    # build the padded rectangle
+    circles = [Circle(c=v, r=radius) for v in rect.vertices]
+    segs = [
+        Segment([rect.x - radius, rect.y], [rect.x - radius, rect.y + h]),
+        Segment(
+            [rect.x, rect.y + rect.h + radius],
+            [rect.x + rect.w, rect.y + rect.h + radius],
+        ),
+        Segment(
+            [rect.x + rect.w + radius, rect.y + rect.h],
+            [rect.x + rect.w + radius, rect.y],
+        ),
+        Segment([rect.x + rect.w, rect.y - radius], [rect.x, rect.y - radius]),
+    ]
+
+    # now we check each of the shapes
+    min_time = 1
+    for circle in circles:
+        if not segment_circle_intersect(segment, circle):
+            continue
+        t = segment_circle_intersect_time(segment, circle)
+        min_time = min(min_time, t)
+    for seg in segs:
+        t = segment_segment_intersect_time(segment, seg)
+        if t is not None:
+            min_time = min(min_time, t)
+    return min_time

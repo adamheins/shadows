@@ -34,3 +34,13 @@ def angle2pi(v, start=0):
     if a < 0:
         a = 2 * np.pi + a
     return a
+
+
+def quad_formula(a, b, c):
+    """Evaluate the quadratic formula for coefficients a, b, c.
+
+    The two solutions are returned.
+    """
+    d = np.sqrt(b ** 2 - 4 * a * c)
+    return (-b - d) / (2 * a), (-b + d) / (2 * a)
+

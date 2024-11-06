@@ -1,6 +1,8 @@
 class Color:
-    BACKGROUND = (219, 200, 184)
-    SHADOW = (100, 100, 100)
+    # BACKGROUND = (219, 200, 184)
+    BACKGROUND = (255, 255, 255)
+    # SHADOW = (100, 100, 100)
+    SHADOW = (0, 0, 0)
     PROJECTILE = (0, 0, 0)
     PLAYER = (255, 0, 0)
     ENEMY = (0, 0, 255)
