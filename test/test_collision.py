@@ -126,52 +126,90 @@ def test_segment_segment_query():
     assert np.allclose(Q.p2, [110, 10])
 
 
-def test_segment_poly_intersect():
-    rect = shoot.AARect(100, 100, 100, 100)
-
-    # not intersecting
-    segment = shoot.Segment((100, 90), (150, 90))
-    assert not shoot.segment_poly_intersect(segment, rect)
-
-    segment = shoot.Segment((190, 210), (220, 190))
-    assert not shoot.segment_poly_intersect(segment, rect)
-
-    # intersecting
-    segment = shoot.Segment((90, 90), (110, 110))
-    assert shoot.segment_poly_intersect(segment, rect)
-
-    segment = shoot.Segment((180, 210), (210, 180))
-    assert shoot.segment_poly_intersect(segment, rect)
-
-
-def test_segment_poly_intersect_time():
+def test_segment_poly_query():
     rect = shoot.AARect(x=0, y=0, w=100, h=100)
 
+    # intersecting
     segment = shoot.Segment((-50, 50), (50, 50))
-    assert np.isclose(shoot.segment_poly_intersect_time(segment, rect), 0.5)
+    Q = shoot.segment_poly_query(segment, rect)
+    assert Q.intersect
+    assert np.isclose(Q.distance, 0)
+    assert np.isclose(Q.time, 0.5)
+    assert np.allclose(Q.normal, [-1, 0])
 
     # just barely intersect at one corner
     segment = shoot.Segment((50, 150), (150, 50))
-    assert np.isclose(shoot.segment_poly_intersect_time(segment, rect), 0.5)
+    Q = shoot.segment_poly_query(segment, rect)
+    assert Q.intersect
+    assert np.isclose(Q.distance, 0)
+    assert np.isclose(Q.time, 0.5)
+
+    # intersecting two edges
+    segment = shoot.Segment((-50, 100), (100, -50))
+    Q = shoot.segment_poly_query(segment, rect)
+    assert Q.intersect
+    assert np.isclose(Q.distance, 0)
+    assert np.isclose(Q.time, 1.0 / 3)
+    # normal is the first edge passed through
+    assert np.allclose(Q.normal, [-1, 0])
 
     # not intersecting
     segment = shoot.Segment((-50, 110), (50, 110))
-    assert shoot.segment_poly_intersect_time(segment, rect) is None
+    Q = shoot.segment_poly_query(segment, rect)
+    assert not Q.intersect
+    assert np.isclose(Q.distance, 10)
+
+    segment = shoot.Segment((-20, 0), (0, -20))
+    Q = shoot.segment_poly_query(segment, rect)
+    assert not Q.intersect
+    assert np.isclose(Q.distance, np.sqrt(200))
 
 
-def swept_circle_poly_intersect():
+def test_swept_circle_poly_query():
     radius = 10
     rect = shoot.AARect(x=0, y=0, w=100, h=100)
 
     # not intersecting
     segment = shoot.Segment((0, 120), (100, 120))
-    assert not shoot.swept_circle_poly_intersect(segment, radius, rect)
+    Q = shoot.swept_circle_poly_query(segment, radius, rect)
+    assert not Q.intersect
+    assert np.isclose(Q.distance, 10)
 
     # segment does not intersect but swept circle does
     segment = shoot.Segment((80, 130), (130, 80))
-    assert not shoot.segment_poly_intersect(segment, radius, rect)
-    assert shoot.swept_circle_poly_intersect(segment, radius, rect)
+    assert not shoot.segment_poly_query(segment, rect).intersect
+    Q = shoot.swept_circle_poly_query(segment, radius, rect)
+    assert Q.intersect
+    assert np.isclose(Q.distance, 0)
 
-    segment = shoot.Segment((105, 105), (105, 150))
-    assert not shoot.segment_poly_intersect(segment, radius, rect)
-    assert shoot.swept_circle_poly_intersect(segment, radius, rect)
+    segment = shoot.Segment((120, 50), (80, 50))
+    Q = shoot.swept_circle_poly_query(segment, radius, rect)
+    assert Q.intersect
+    assert np.isclose(Q.time, 0.25)
+
+    # just touching at a single point
+    segment = shoot.Segment((-50, 50), (-10, 50))
+    Q = shoot.swept_circle_poly_query(segment, radius, rect)
+    assert Q.intersect
+    assert np.isclose(Q.time, 1)
+    assert np.isclose(Q.distance, 0)
+    assert np.allclose(Q.p1, [-10, 50])
+    assert np.allclose(Q.p2, [-10, 50])
+    assert np.allclose(Q.normal, [-1, 0])
+
+    # some penetration
+    segment = shoot.Segment((-50, 50), (0, 50))
+    Q = shoot.swept_circle_poly_query(segment, radius, rect)
+    assert Q.intersect
+    assert np.isclose(Q.time, 0.8)
+    assert np.isclose(Q.distance, 0)
+    assert np.allclose(Q.normal, [-1, 0])
+
+    # not intersecting: the closest point is when the segment passes through
+    # (115, 115)
+    segment = shoot.Segment((90, 140), (140, 90))
+    assert not shoot.segment_poly_query(segment, rect).intersect
+    Q = shoot.swept_circle_poly_query(segment, radius, rect)
+    assert not Q.intersect
+    assert np.isclose(Q.distance, np.sqrt(2 * 15**2) - radius)
+    assert np.allclose(Q.normal, shoot.unit([1, 1]))

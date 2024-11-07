@@ -223,16 +223,24 @@ class TagGame:
                 for obstacle in self.obstacles:
 
                     # collision time and normal
-                    t, n = swept_circle_poly_intersect_time(path, agent.radius, obstacle)
-                    if t is not None and (min_time is None or t < min_time):
-                        min_time = t
-                        normal = n
+                    Q = swept_circle_poly_query(path, agent.radius, obstacle)
+                    if Q.intersect and (min_time is None or t < min_time):
+                        min_time = Q.time
+                        normal = Q.normal
 
                 # tangent velocity
-                if min_time is not None:
-                    print(min_time)
+                # TODO this still fails sometimes
+                if min_time is not None and normal @ v < 0:
+
+                    print(f"\nt = {min_time}")
+                    print(f"n = {normal}")
+                    print(f"p = {agent.position}")
+                    print(f"v = {np.linalg.norm(TIMESTEP * v)}")
+
                     tan = orth(normal)
                     vtan = (tan @ v) * tan
+
+                    # TODO is this correct?
                     v = min_time * v + (1 - min_time) * vtan
 
             agent.velocity = v
