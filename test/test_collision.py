@@ -3,6 +3,25 @@ import numpy as np
 import shoot
 
 
+def test_line_rect_edge_intersection():
+    rect = shoot.AARect(0, 0, 100, 100)
+
+    q = shoot.line_rect_edge_intersection(p=(50, 50), v=(1, 0), rect=rect)
+    assert np.allclose(q, (100, 50))
+
+    q = shoot.line_rect_edge_intersection(p=(50, 50), v=(-1, 0), rect=rect)
+    assert np.allclose(q, (0, 50))
+
+    q = shoot.line_rect_edge_intersection(p=(50, 50), v=(0, 1), rect=rect)
+    assert np.allclose(q, (50, 100))
+
+    q = shoot.line_rect_edge_intersection(p=(50, 50), v=(0, -1), rect=rect)
+    assert np.allclose(q, (50, 0))
+
+    q = shoot.line_rect_edge_intersection(p=(50, 50), v=(1, 1), rect=rect)
+    assert np.allclose(q, (100, 100))
+
+
 def test_point_in_rect():
     rect = shoot.AARect(100, 100, 50, 20)
 

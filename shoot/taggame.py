@@ -206,8 +206,6 @@ class TagGame:
                 v[1] = max(0, v[1])
 
             # don't walk into an obstacle
-            # TODO ideally we'd only cut off the portion of the normal velocity
-            # before collision - need a swept circle/rect intersection
             # if np.linalg.norm(v) > 0:
             #     for obstacle in self.obstacles:
             #         n = obstacle.compute_collision_normal(agent.position, agent.radius)
@@ -215,7 +213,6 @@ class TagGame:
             #             t = orth(n)
             #             v = (t @ v) * t
 
-            # TODO this is broken, but not sure why
             if np.linalg.norm(v) > 0:
                 path = Segment(agent.position, agent.position + TIMESTEP * v)
                 min_time = None
@@ -228,19 +225,15 @@ class TagGame:
                         min_time = Q.time
                         normal = Q.normal
 
-                # tangent velocity
-                # TODO this still fails sometimes
                 if min_time is not None and normal @ v < 0:
+                    # print(f"\nt = {min_time}")
+                    # print(f"n = {normal}")
+                    # print(f"p = {agent.position}")
+                    # print(f"v = {np.linalg.norm(TIMESTEP * v)}")
 
-                    print(f"\nt = {min_time}")
-                    print(f"n = {normal}")
-                    print(f"p = {agent.position}")
-                    print(f"v = {np.linalg.norm(TIMESTEP * v)}")
-
+                    # tangent velocity
                     tan = orth(normal)
                     vtan = (tan @ v) * tan
-
-                    # TODO is this correct?
                     v = min_time * v + (1 - min_time) * vtan
 
             agent.velocity = v

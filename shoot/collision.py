@@ -92,7 +92,7 @@ def line_rect_edge_intersection(p, v, rect):
     v : pair of float
         Direction vector of the line (does not need to be normalized).
     rect : AARect
-        Rectangle of the screen.
+        Rectangle containing ``p``.
 
     Returns
     -------
@@ -100,24 +100,20 @@ def line_rect_edge_intersection(p, v, rect):
         The closest intersection point corresponding to non-negative distance
         along direction v.
     """
-    # TODO can generalize to get rid of this
-    assert rect.x == 0
-    assert rect.y == 0
-
     ts = []
 
     # vertical edges
     if not np.isclose(v[0], 0):
-        ts.extend([-p[0] / v[0], (rect.w - p[0]) / v[0]])
+        ts.extend([(rect.x - p[0]) / v[0], (rect.x + rect.w - p[0]) / v[0]])
 
     # horizontal edges
     if not np.isclose(v[1], 0):
-        ts.extend([-p[1] / v[1], (rect.h - p[1]) / v[1]])
+        ts.extend([(rect.y - p[1]) / v[1], (rect.y + rect.h - p[1]) / v[1]])
 
     # return the smallest positive value
     ts = np.array(ts)
     t = np.min(ts[ts >= 0])
-    return p + t * v
+    return p + t * np.array(v)
 
 
 def point_in_poly(point, poly, tol=1e-8):
@@ -498,8 +494,6 @@ def swept_circle_poly_query(segment, radius, poly):
     Q = point_poly_query(segment.start, poly2)
     if Q.intersect:
         Q.time = 0
-        if np.allclose(Q.normal, 0):
-            print(Q)
         return Q
 
     for circle in circles:
