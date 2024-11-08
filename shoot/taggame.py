@@ -155,6 +155,11 @@ class TagGame:
         )
 
     def draw(self):
+        """Render the game.
+
+        If ``display`` is ``False``, the screen image is returned as an RGB
+        array.
+        """
         self.screen.fill(Color.BACKGROUND)
 
         for enemy in self.enemies:
@@ -206,13 +211,6 @@ class TagGame:
                 v[1] = max(0, v[1])
 
             # don't walk into an obstacle
-            # if np.linalg.norm(v) > 0:
-            #     for obstacle in self.obstacles:
-            #         n = obstacle.compute_collision_normal(agent.position, agent.radius)
-            #         if n is not None and n @ v < 0:
-            #             t = orth(n)
-            #             v = (t @ v) * t
-
             if np.linalg.norm(v) > 0:
                 path = Segment(agent.position, agent.position + TIMESTEP * v)
                 min_time = None
@@ -226,11 +224,6 @@ class TagGame:
                         normal = Q.normal
 
                 if min_time is not None and normal @ v < 0:
-                    # print(f"\nt = {min_time}")
-                    # print(f"n = {normal}")
-                    # print(f"p = {agent.position}")
-                    # print(f"v = {np.linalg.norm(TIMESTEP * v)}")
-
                     # tangent velocity
                     tan = orth(normal)
                     vtan = (tan @ v) * tan
@@ -262,6 +255,7 @@ class TagGame:
             agent.step(TIMESTEP)
 
     def loop(self):
+        """Main game loop."""
         while True:
 
             # process events
@@ -288,8 +282,8 @@ class TagGame:
 
             lookback = pygame.K_SPACE in self.keys_down
 
-            # actions = self.enemy_policy.compute()
-            actions = {}
+            actions = self.enemy_policy.compute()
+            # actions = {}
             actions[self.player.id] = Action(
                 lindir=[lindir, 0],
                 angdir=angdir,
