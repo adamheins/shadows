@@ -18,12 +18,10 @@ TAG_COOLDOWN = 120  # ticks
 class TagAIPolicy:
     """Basic AI policy for the tag game."""
 
-    def __init__(self, agent_id, player_id, agents, obstacles, shape):
+    def __init__(self, agent, player, obstacles, shape):
         self.shape = shape
-        self.agent = agents[agent_id]
-        self.player = agents[player_id]
-
-        self.agents = agents
+        self.agent = agent
+        self.player = player
         self.obstacles = obstacles
 
     def _it_policy(self):
@@ -91,7 +89,9 @@ class TagAIPolicy:
 
 
 class TagGame:
-    def __init__(self, shape, player_it=False, invert_agent_colors=False, display=True):
+    def __init__(
+        self, shape=(200, 200), player_it=False, invert_agent_colors=False, display=True
+    ):
         self.shape = shape
         self.display = display
 
@@ -139,18 +139,17 @@ class TagGame:
         # id of the agent that is "it"
         if player_it:
             self.player.it = True
-            self.it_id = self.player.id
+            self.it_id = 0
         else:
             self.enemies[0].it = True
-            self.it_id = self.enemies[0].id
+            self.it_id = 1
 
         self.tag_cooldown = 0
 
         self.enemy_policy = TagAIPolicy(
-            self.enemies[0].id,
-            self.player.id,
-            self.agents,
-            self.obstacles,
+            agent=self.enemies[0],
+            player=self.player,
+            obstacles=self.obstacles,
             shape=self.shape,
         )
 
@@ -182,9 +181,11 @@ class TagGame:
             pygame.display.flip()
         else:
             # extract the screen image
+            # this is in channel-first format, which preferred by stable
+            # baselines
             raw = np.array(pygame.PixelArray(self.screen))
-            rgb = np.array([raw >> 16, raw >> 8, raw]) & 0xFF
-            rgb = np.moveaxis(rgb, 0, -1)
+            rgb = np.array([raw >> 16, raw >> 8, raw], dtype=np.uint8) & 0xFF
+            # rgb = np.moveaxis(rgb, 0, -1)
             return rgb
 
     def step(self, actions):
@@ -222,20 +223,31 @@ class TagGame:
                     if Q.intersect and (min_time is None or t < min_time):
                         min_time = Q.time
                         normal = Q.normal
+                        if normal is None:
+                            print(f"path = {path}")
+                            print(f"Q = {Q}")
+                            print(f"obs(x={obstacle.x}, y={obstacle.y}, w={obstacle.w}, h={obstacle.h})")
+                            raise ValueError("normal is none!")
 
-                if min_time is not None and normal @ v < 0:
-                    # tangent velocity
-                    tan = orth(normal)
-                    vtan = (tan @ v) * tan
-                    v = min_time * v + (1 - min_time) * vtan
+                try:
+                    if min_time is not None and normal @ v < 0:
+                        # tangent velocity
+                        tan = orth(normal)
+                        vtan = (tan @ v) * tan
+                        v = min_time * v + (1 - min_time) * vtan
+                except ValueError as e:
+                    print(f"min_time = {min_time}")
+                    print(f"normal = {normal}")
+                    print(f"v = {v}")
+                    raise e
 
             agent.velocity = v
 
         # check if someone has been tagged
         if self.tag_cooldown == 0:
             it_agent = self.agents[self.it_id]
-            for agent in self.agents:
-                if agent.id == self.it_id:
+            for i, agent in enumerate(self.agents):
+                if i == self.it_id:
                     continue
 
                 # switch who is "it"
@@ -244,7 +256,7 @@ class TagGame:
                     self.tag_cooldown = TAG_COOLDOWN
                     it_agent.it = False
                     agent.it = True
-                    self.it_id = agent.id
+                    self.it_id = i
                     break
 
         # cannot move after just being tagged

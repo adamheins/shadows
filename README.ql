@@ -20,6 +20,11 @@ poetry env use 3.9
 == Other ideas ==
 * Idea: shoot makes you visible
 
+== Learning ==
+* Current approach is to keep this repo and env separate from any RL stuff, and
+  just `pip install -e .` it in the RL zoo's venv
+* Do I need to specify wrappers for the env?
+
 == Possible other games ==
 * Another idea for a game is to have one applying force to some body while
   bouncing off of other bodies subject to gravity and also shooting to propel

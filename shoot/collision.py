@@ -73,6 +73,9 @@ class Segment:
         self.direction = unit(self.v)
         self.normal = unit(orth(self.v))
 
+    def __repr__(self):
+        return f"Segment(start={self.start}, end={self.end})"
+
 
 class Circle:
     """2D circle."""
@@ -241,6 +244,7 @@ def point_poly_query(point, poly):
     : CollisionQuery
         The collision information between the two shapes.
     """
+    # TODO normal can still be None
     min_depth = np.inf
     normal = None
     for v, n in zip(poly.vertices, poly.in_normals):
@@ -259,6 +263,7 @@ def point_poly_query(point, poly):
     # otherwise the point is outside the polygon
     # return the query for the closest edge
     min_dist_query = point_segment_query(point, poly.edges[0])
+    min_dist_query.normal = unit(point - min_dist_query.p2)
     for i, edge in enumerate(poly.edges[1:]):
         Q = point_segment_query(point, edge)
         if Q.intersect:
@@ -452,7 +457,9 @@ def segment_poly_query(segment, poly):
 
 
 def swept_circle_poly_query(segment, radius, poly):
-    """Collision query between a segment and a polygon.
+    """Collision query between circle swept along a path and a polygon.
+
+    See https://gamedev.stackexchange.com/a/106032.
 
     Parameters
     ----------

@@ -5,14 +5,12 @@ description = "A shooter game."
 authors = ["Adam Heins <mail@adamheins.com>"]
 
 [tool.poetry.dependencies]
-python = ">=3.9,<3.12"
+python = ">=3.9,<3.13"
 pygame = "^2.5.2"
 numpy = "^1.23.5"
 pyyaml = "^6.0.1"
 gymnasium = "^1.0.0"
-# torch = "^2.5.1"
-# torchrl = "^0.6.0"
-# tensordict = "^0.6.1"
+# rl-zoo3 = "^2.3.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"

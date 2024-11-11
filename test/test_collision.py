@@ -232,3 +232,17 @@ def test_swept_circle_poly_query():
     assert not Q.intersect
     assert np.isclose(Q.distance, np.sqrt(2 * 15**2) - radius)
     assert np.allclose(Q.normal, shoot.unit([1, 1]))
+
+
+def test_extra():
+    radius = 10
+    dt = 1. / 60
+    v = np.array([37.5345882, 92.68848196])
+    start = np.array([70., 119.48734106])
+    end = start + dt * v
+    path = shoot.Segment(start, end)
+
+    rect = shoot.AARect(x=75, y=75, w=50, h=50)
+
+    Q = shoot.swept_circle_poly_query(path, radius, rect)
+    print(Q)
