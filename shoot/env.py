@@ -7,6 +7,11 @@ from .entity import Action
 from .taggame import TagGame
 
 
+RGB_CHANNEL_FIRST = False
+FLATTEN_ACTION_SPACE = True
+USE_SPARSE_REWARD = False
+
+
 class TagItEnv(gym.Env):
     """Environment where the agent is 'it'."""
 
@@ -19,34 +24,64 @@ class TagItEnv(gym.Env):
         # directions to move
         # first channel is linear direction
         # second channel is angular direction
-        self.action_space = gym.spaces.MultiDiscrete((3, 3))
+        if FLATTEN_ACTION_SPACE:
+            self.action_space = gym.spaces.Discrete(3 * 3)
+        else:
+            self.action_space = gym.spaces.MultiDiscrete((3, 3))
 
         # RGB pixels
+        if RGB_CHANNEL_FIRST:
+            shape = (3,) + self.game.shape
+        else:
+            shape = self.game.shape + (3,)
         self.observation_space = gym.spaces.Box(
-            low=0, high=255, shape=(3,) + self.game.shape, dtype=np.uint8
+            low=0, high=255, shape=shape, dtype=np.uint8
         )
 
     def _get_info(self):
         return {}
 
-    def _translate_action(self, action):
-        # lindir
-        # no movement, forward, backward
-        if action[0] == 0:
-            lindir = 0
-        elif action[0] == 1:
-            lindir = 1
-        elif action[0] == 2:
-            lindir = -1
+    def _get_obs(self):
+        rgb = self.game.draw()
+        if not RGB_CHANNEL_FIRST:
+            rgb = np.moveaxis(rgb, 0, -1)
+        return rgb
 
-        # angdir
-        # no movement, turn right, turn left
-        if action[1] == 0:
-            angdir = 0
-        elif action[1] == 1:
-            angdir = 1
-        elif action[1] == 2:
-            angdir = -1
+    def _translate_action(self, action):
+
+        if FLATTEN_ACTION_SPACE:
+            if action < 3:
+                lindir = 0
+            elif 3 <= action < 6:
+                lindir = 1
+            else:
+                lindir = 2
+
+            m = action % 3
+            if m == 0:
+                angdir = 0
+            elif m == 1:
+                angdir = 1
+            elif m == 2:
+                angdir = -1
+        else:
+            # lindir
+            # no movement, forward, backward
+            if action[0] == 0:
+                lindir = 0
+            elif action[0] == 1:
+                lindir = 1
+            elif action[0] == 2:
+                lindir = -1
+
+            # angdir
+            # no movement, turn right, turn left
+            if action[1] == 0:
+                angdir = 0
+            elif action[1] == 1:
+                angdir = 1
+            elif action[1] == 2:
+                angdir = -1
 
         actions = self.game.enemy_policy.compute()
         actions[self.player.id] = Action(
@@ -61,12 +96,13 @@ class TagItEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         """Reset the game environment."""
+        print("reset")
         super().reset(seed=seed)
 
         # TODO we could reset the obstacles as well...
         n = 1000
 
-        # reset positions as long as not in obstacles
+        # randomly reset agent positions to collision-free positions
         w, h = self.game.shape
         for agent in self.game.agents:
             agent.angle = self.np_random.uniform(low=-np.pi, high=np.pi)
@@ -85,14 +121,21 @@ class TagItEnv(gym.Env):
                 if i == n - 1:
                     raise ValueError("failed to generate agent position!")
 
+        print("reset one")
+        for agent in self.game.agents:
+            print(f"position = {agent.position}")
+
         # reset who is it
         for agent in self.game.agents:
             agent.it = False
         self.game.player.it = True
         self.game.it_id = 0
 
-        obs = self.game.draw()
+        print("reset two")
+
+        obs = self._get_obs()
         info = self._get_info()
+        print("reset three")
         return obs, info
 
     def step(self, action):
@@ -104,11 +147,14 @@ class TagItEnv(gym.Env):
         terminated = d < r
         truncated = False
 
-        # big reward for tagging the enemy, small cost for being farther away
-        # from it
-        reward = 100 if terminated else -0.1 * d
+        if USE_SPARSE_REWARD:
+            reward = 1 if terminated else 0
+        else:
+            # big reward for tagging the enemy, small cost for being farther away
+            # from it
+            reward = 100 if terminated else -0.1 * d
 
-        obs = self.game.draw()
+        obs = self._get_obs()
         info = self._get_info()
         return obs, reward, terminated, truncated, info
 

@@ -23,7 +23,13 @@ poetry env use 3.9
 == Learning ==
 * Current approach is to keep this repo and env separate from any RL stuff, and
   just `pip install -e .` it in the RL zoo's venv
-* Do I need to specify wrappers for the env?
+* Wrappers seemingly don't work well
+  - GrayscaleObservation makes it so I can't use the CnnPolicy
+  - ResizeObservation doesn't parse the size properly as a tuple?
+* Probably do actually need to put together multiple frames as a memory here,
+  since we need to remember where the agent being chased was previously
+* Currently PPO gets stuck at 25000 samples
+  - does not seem to be affected by learning_rate, n_envs
 
 == Possible other games ==
 * Another idea for a game is to have one applying force to some body while

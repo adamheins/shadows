@@ -14,6 +14,8 @@ TIMESTEP = 1.0 / FRAMERATE
 
 TAG_COOLDOWN = 120  # ticks
 
+# for more efficiency we can turn off continuous collision detection
+USE_CCD = False
 
 class TagAIPolicy:
     """Basic AI policy for the tag game."""
@@ -185,7 +187,6 @@ class TagGame:
             # baselines
             raw = np.array(pygame.PixelArray(self.screen))
             rgb = np.array([raw >> 16, raw >> 8, raw], dtype=np.uint8) & 0xFF
-            # rgb = np.moveaxis(rgb, 0, -1)
             return rgb
 
     def step(self, actions):
@@ -213,33 +214,30 @@ class TagGame:
 
             # don't walk into an obstacle
             if np.linalg.norm(v) > 0:
-                path = Segment(agent.position, agent.position + TIMESTEP * v)
+                # collision time and normal
                 min_time = None
                 normal = None
-                for obstacle in self.obstacles:
+                if USE_CCD:
+                    path = Segment(agent.position, agent.position + TIMESTEP * v)
+                    for obstacle in self.obstacles:
+                        Q = swept_circle_poly_query(path, agent.radius, obstacle)
+                        if Q.intersect and (min_time is None or t < min_time):
+                            min_time = Q.time
+                            normal = Q.normal
 
-                    # collision time and normal
-                    Q = swept_circle_poly_query(path, agent.radius, obstacle)
-                    if Q.intersect and (min_time is None or t < min_time):
-                        min_time = Q.time
-                        normal = Q.normal
-                        if normal is None:
-                            print(f"path = {path}")
-                            print(f"Q = {Q}")
-                            print(f"obs(x={obstacle.x}, y={obstacle.y}, w={obstacle.w}, h={obstacle.h})")
-                            raise ValueError("normal is none!")
+                else:
+                    for obstacle in self.obstacles:
+                        Q = point_poly_query(agent.position, obstacle)
+                        if Q.distance < agent.radius:
+                            min_time = 0
+                            normal = Q.normal
+                            break
 
-                try:
-                    if min_time is not None and normal @ v < 0:
-                        # tangent velocity
-                        tan = orth(normal)
-                        vtan = (tan @ v) * tan
-                        v = min_time * v + (1 - min_time) * vtan
-                except ValueError as e:
-                    print(f"min_time = {min_time}")
-                    print(f"normal = {normal}")
-                    print(f"v = {v}")
-                    raise e
+                if min_time is not None and normal @ v < 0:
+                    # tangent velocity
+                    tan = orth(normal)
+                    vtan = (tan @ v) * tan
+                    v = min_time * v + (1 - min_time) * vtan
 
             agent.velocity = v
 
