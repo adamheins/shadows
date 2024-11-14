@@ -11,15 +11,28 @@ RGB_CHANNEL_FIRST = False
 FLATTEN_ACTION_SPACE = True
 USE_SPARSE_REWARD = False
 
+# truncate each episode to at most this many timesteps (if the enemy is not
+# tagged first)
+MAX_STEPS_PER_EPISODE = 1000
+
 
 class TagItEnv(gym.Env):
     """Environment where the agent is 'it'."""
 
-    def __init__(self):
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 60}
+
+    def __init__(self, render_mode="rgb_array"):
         pygame.init()
+
         self.game = TagGame(player_it=True, invert_agent_colors=True, display=False)
         self.player = self.game.player
         self.enemy = self.game.enemies[0]
+
+        # TODO don't really like this
+        if render_mode == "human":
+            self.game.screen = pygame.display.set_mode(
+                self.game.shape, flags=pygame.SCALED
+            )
 
         # directions to move
         # first channel is linear direction
@@ -38,24 +51,26 @@ class TagItEnv(gym.Env):
             low=0, high=255, shape=shape, dtype=np.uint8
         )
 
+        self.render_mode = render_mode
+        self._steps = 0
+
     def _get_info(self):
         return {}
 
     def _get_obs(self):
-        rgb = self.game.draw()
+        rgb = self.game.rgb()
         if not RGB_CHANNEL_FIRST:
             rgb = np.moveaxis(rgb, 0, -1)
         return rgb
 
     def _translate_action(self, action):
-
         if FLATTEN_ACTION_SPACE:
             if action < 3:
                 lindir = 0
             elif 3 <= action < 6:
                 lindir = 1
             else:
-                lindir = 2
+                lindir = -1
 
             m = action % 3
             if m == 0:
@@ -96,8 +111,9 @@ class TagItEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         """Reset the game environment."""
-        print("reset")
         super().reset(seed=seed)
+
+        self._steps = 0
 
         # TODO we could reset the obstacles as well...
         n = 1000
@@ -121,31 +137,27 @@ class TagItEnv(gym.Env):
                 if i == n - 1:
                     raise ValueError("failed to generate agent position!")
 
-        print("reset one")
-        for agent in self.game.agents:
-            print(f"position = {agent.position}")
-
         # reset who is it
         for agent in self.game.agents:
             agent.it = False
         self.game.player.it = True
         self.game.it_id = 0
 
-        print("reset two")
-
+        self.game.draw()
         obs = self._get_obs()
         info = self._get_info()
-        print("reset three")
         return obs, info
 
     def step(self, action):
+        self._steps += 1
         self.game.step(self._translate_action(action))
 
         # round terminates when the enemy is tagged
         r = self.player.radius + self.enemy.radius
         d = np.linalg.norm(self.player.position - self.enemy.position)
         terminated = d < r
-        truncated = False
+
+        truncated = self._steps >= MAX_STEPS_PER_EPISODE
 
         if USE_SPARSE_REWARD:
             reward = 1 if terminated else 0
@@ -154,9 +166,19 @@ class TagItEnv(gym.Env):
             # from it
             reward = 100 if terminated else -0.1 * d
 
+        self.game.draw()
         obs = self._get_obs()
         info = self._get_info()
         return obs, reward, terminated, truncated, info
+
+    def render(self):
+        # TODO this should return the array or actually render the
+        # scene
+        # pygame.event.pump()
+        if self.render_mode == "human":
+            pygame.display.flip()
+        elif self.render_mode == "rgb_array":
+            return self.game.rgb()
 
 
 # class TagNotItEnv(gym.Env):

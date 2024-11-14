@@ -17,6 +17,9 @@ TAG_COOLDOWN = 120  # ticks
 # for more efficiency we can turn off continuous collision detection
 USE_CCD = False
 
+USE_AI_POLICY = True
+
+
 class TagAIPolicy:
     """Basic AI policy for the tag game."""
 
@@ -181,13 +184,15 @@ class TagGame:
 
         if self.display:
             pygame.display.flip()
-        else:
-            # extract the screen image
-            # this is in channel-first format, which preferred by stable
-            # baselines
-            raw = np.array(pygame.PixelArray(self.screen))
-            rgb = np.array([raw >> 16, raw >> 8, raw], dtype=np.uint8) & 0xFF
-            return rgb
+
+    def rgb(self):
+        """Return the current screen image as a RGB pixel array."""
+        # extract the screen image
+        # this is in channel-first format, which preferred by stable
+        # baselines
+        raw = np.array(pygame.PixelArray(self.screen))
+        rgb = np.array([raw >> 16, raw >> 8, raw], dtype=np.uint8) & 0xFF
+        return rgb
 
     def step(self, actions):
         """Step the game forward in time."""
@@ -292,8 +297,10 @@ class TagGame:
 
             lookback = pygame.K_SPACE in self.keys_down
 
-            actions = self.enemy_policy.compute()
-            # actions = {}
+            if USE_AI_POLICY:
+                actions = self.enemy_policy.compute()
+            else:
+                actions = {}
             actions[self.player.id] = Action(
                 lindir=[lindir, 0],
                 angdir=angdir,

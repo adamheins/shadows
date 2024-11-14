@@ -244,7 +244,6 @@ def point_poly_query(point, poly):
     : CollisionQuery
         The collision information between the two shapes.
     """
-    # TODO normal can still be None
     min_depth = np.inf
     normal = None
     for v, n in zip(poly.vertices, poly.in_normals):
