@@ -2,18 +2,31 @@ import pygame
 import numpy as np
 import gymnasium as gym
 
-from .collision import point_poly_query
-from .entity import Action
-from .taggame import TagGame
+from ..collision import point_poly_query
+from ..entity import Action
+from .game import TagGame
 
 
-RGB_CHANNEL_FIRST = False
+# put the RGB channel dimension first in the observation array, otherwise put
+# it last
+# RGB_CHANNEL_FIRST = False
+
+# only give rewards when the other agent is successfully tagged
+USE_SPARSE_REWARD = True
+
+# use one flat discrete action space rather than a multidiscrete space
 FLATTEN_ACTION_SPACE = True
-USE_SPARSE_REWARD = False
+
+# always move forward, only choice of action is the angular direction
+REDUCE_ACTION_SPACE = True
 
 # truncate each episode to at most this many timesteps (if the enemy is not
 # tagged first)
 MAX_STEPS_PER_EPISODE = 1000
+
+USE_AI_POLICY = False
+
+DRAW_OCCLUSIONS = False
 
 
 class TagItEnv(gym.Env):
@@ -24,7 +37,12 @@ class TagItEnv(gym.Env):
     def __init__(self, render_mode="rgb_array"):
         pygame.init()
 
-        self.game = TagGame(player_it=True, invert_agent_colors=True, display=False)
+        self.game = TagGame(
+            player_it=True,
+            invert_agent_colors=True,
+            display=False,
+            draw_occlusions=DRAW_OCCLUSIONS,
+        )
         self.player = self.game.player
         self.enemy = self.game.enemies[0]
 
@@ -37,46 +55,55 @@ class TagItEnv(gym.Env):
         # directions to move
         # first channel is linear direction
         # second channel is angular direction
-        if FLATTEN_ACTION_SPACE:
+        if REDUCE_ACTION_SPACE:
+            self.action_space = gym.spaces.Discrete(3 * 2)
+        elif FLATTEN_ACTION_SPACE:
             self.action_space = gym.spaces.Discrete(3 * 3)
         else:
             self.action_space = gym.spaces.MultiDiscrete((3, 3))
 
         # RGB pixels
-        if RGB_CHANNEL_FIRST:
-            shape = (3,) + self.game.shape
-        else:
-            shape = self.game.shape + (3,)
+        # if RGB_CHANNEL_FIRST:
+        #     shape = (3,) + self.game.shape
+        # else:
+        shape = self.game.shape + (3,)
         self.observation_space = gym.spaces.Box(
             low=0, high=255, shape=shape, dtype=np.uint8
         )
 
         self.render_mode = render_mode
+
+        # steps per episode
         self._steps = 0
 
+        self._resets = 0
+
     def _get_info(self):
-        return {}
+        return {
+            "player_position": self.player.position,
+            "enemy_position": self.enemy.position,
+        }
 
     def _get_obs(self):
-        rgb = self.game.rgb()
-        if not RGB_CHANNEL_FIRST:
-            rgb = np.moveaxis(rgb, 0, -1)
-        return rgb
+        return self.game.rgb()
+        # if not RGB_CHANNEL_FIRST:
+        #     rgb = np.moveaxis(rgb, 0, -1)
+        # return rgb
 
     def _translate_action(self, action):
         if FLATTEN_ACTION_SPACE:
             if action < 3:
-                lindir = 0
-            elif 3 <= action < 6:
                 lindir = 1
+            elif 3 <= action < 6:
+                lindir = 0
             else:
                 lindir = -1
 
             m = action % 3
             if m == 0:
-                angdir = 0
-            elif m == 1:
                 angdir = 1
+            elif m == 1:
+                angdir = 0
             elif m == 2:
                 angdir = -1
         else:
@@ -98,7 +125,14 @@ class TagItEnv(gym.Env):
             elif action[1] == 2:
                 angdir = -1
 
-        actions = self.game.enemy_policy.compute()
+        # print(f"action = {action}")
+        # print(f"lindir = {lindir}")
+        # print(f"angdir = {angdir}")
+
+        if USE_AI_POLICY:
+            actions = self.game.enemy_policy.compute()
+        else:
+            actions = {}
         actions[self.player.id] = Action(
             lindir=[lindir, 0],
             angdir=angdir,
@@ -120,13 +154,26 @@ class TagItEnv(gym.Env):
 
         # randomly reset agent positions to collision-free positions
         w, h = self.game.shape
-        for agent in self.game.agents:
+        for idx, agent in enumerate(self.game.agents):
             agent.angle = self.np_random.uniform(low=-np.pi, high=np.pi)
             # while True:
             for i in range(n):
                 r = agent.radius
                 agent.position = self.np_random.uniform(low=(r, r), high=(w - r, h - r))
                 collision = False
+
+                # check for collision with other agents
+                if idx > 0:
+                    for other in self.game.agents[:idx]:
+                        d = np.linalg.norm(agent.position - other.position)
+                        if d < 2 * r + 2 * r:
+                            collision = True
+                            break
+                if collision:
+                    print("avoiding collision with other agent")
+                    continue
+
+                # check for collision with obstacles
                 for obstacle in self.game.obstacles:
                     Q = point_poly_query(agent.position, obstacle)
                     if Q.distance <= r:
@@ -146,6 +193,7 @@ class TagItEnv(gym.Env):
         self.game.draw()
         obs = self._get_obs()
         info = self._get_info()
+        self._resets += 1
         return obs, info
 
     def step(self, action):
@@ -155,7 +203,7 @@ class TagItEnv(gym.Env):
         # round terminates when the enemy is tagged
         r = self.player.radius + self.enemy.radius
         d = np.linalg.norm(self.player.position - self.enemy.position)
-        terminated = d < r
+        terminated = bool(d < r)
 
         truncated = self._steps >= MAX_STEPS_PER_EPISODE
 
@@ -164,7 +212,13 @@ class TagItEnv(gym.Env):
         else:
             # big reward for tagging the enemy, small cost for being farther away
             # from it
-            reward = 100 if terminated else -0.1 * d
+            reward = 1000 if terminated else 2 - 0.01 * d
+
+        if terminated:
+            print("tagged!")
+            print(f"  steps = {self._steps}")
+            print(f"  d = {d}")
+            print(f"  r = {reward}")
 
         self.game.draw()
         obs = self._get_obs()
@@ -172,106 +226,13 @@ class TagItEnv(gym.Env):
         return obs, reward, terminated, truncated, info
 
     def render(self):
-        # TODO this should return the array or actually render the
-        # scene
-        # pygame.event.pump()
         if self.render_mode == "human":
             pygame.display.flip()
         elif self.render_mode == "rgb_array":
             return self.game.rgb()
 
 
-# class TagNotItEnv(gym.Env):
-#     """Environment where the agent is not 'it'."""
-#
-#     def __init__(self):
-#         pygame.init()
-#         self.game = TagGame(player_it=False, invert_agent_colors=True, display=False)
-#         self.player = self.game.player
-#         self.enemy = self.game.enemies[0]
-#
-#         # directions to move
-#         # first channel is linear direction
-#         # second channel is angular direction
-#         # third channel is lookback
-#         self.action_space = gym.spaces.MultiDiscrete((3, 3, 2))
-#
-#         # RGB pixels
-#         self.observation_space = gym.spaces.Box(
-#             0, 255, (self.game.shape + (3,)), dtype=np.uint8
-#         )
-#
-#     def _get_info(self):
-#         return {}
-#
-#     def _translate_action(self, action):
-#         # no movement, forward, backward
-#         if action["lindir"] == 0:
-#             lindir = 0
-#         elif action["lindir"] == 1:
-#             lindir = 1
-#         elif action["lindir"] == 2:
-#             lindir = -1
-#
-#         # no movement, turn right, turn left
-#         if action["angdir"] == 0:
-#             angdir = 0
-#         elif action["angdir"] == 1:
-#             angdir = 1
-#         elif action["angdir"] == 2:
-#             angdir = -1
-#
-#         lookback = bool(action["lookback"][0])
-#
-#         actions = self.game.enemy_policy.compute()
-#         actions[self.player.id] = Action(
-#             lindir=[lindir, 0],
-#             angdir=angdir,
-#             target=None,
-#             reload=False,
-#             frame=Action.LOCAL,
-#             lookback=lookback,
-#         )
-#         return actions
-#
-#     def reset(self, seed=None):
-#         """Reset the game environment."""
-#         super().reset(seed=seed)
-#
-#         # TODO we could reset the obstacles as well...
-#
-#         # reset positions as long as not in obstacles
-#         for agent in self.game.agents:
-#             while True:
-#                 agent.position = self.np_random.uniform(
-#                     low=(0, 0), high=self.game.shape
-#                 )
-#                 agent.angle = self.np_random.uniform(low=-np.pi, high=np.pi)
-#                 for obstacle in self.game.obstacles:
-#                     if point_poly_query(p, obstacle).distance <= agent.radius:
-#                         continue
-#
-#         # reset who is it
-#         for agent in self.game.agents:
-#             agent.it = False
-#         self.game.player.it = True
-#         self.game.it_id = self.game.player.id
-#
-#         obs = self.game.draw()
-#         info = self._get_info()
-#         return obs, info
-#
-#     def step(self, action):
-#         self.game.step(self._translate_action(action))
-#
-#         # round terminates when the enemy is tagged
-#         d = self.player.radius + self.enemy.radius
-#         terminated = np.linalg.norm(self.player.position - self.enemy.position) < d
-#         truncated = False
-#
-#         # negative reward for getting tagged
-#         reward = -1 if terminated else 0
-#
-#         obs = self.game.draw()
-#         info = self._get_info()
-#         return obs, reward, terminated, truncated, info
+gym.register(
+    id="TagIt-v0",
+    entry_point=TagItEnv,
+)

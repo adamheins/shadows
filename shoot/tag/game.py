@@ -2,11 +2,11 @@ import pygame
 import pygame.gfxdraw
 import numpy as np
 
-from .collision import *
-from .math import *
-from .gui import Text, Color
-from .entity import Agent, Action, Projectile
-from .obstacle import Obstacle
+from ..collision import *
+from ..math import *
+from ..gui import Text, Color
+from ..entity import Agent, Action, Projectile
+from ..obstacle import Obstacle
 
 
 FRAMERATE = 60
@@ -95,10 +95,16 @@ class TagAIPolicy:
 
 class TagGame:
     def __init__(
-        self, shape=(200, 200), player_it=False, invert_agent_colors=False, display=True
+        self,
+        shape=(200, 200),
+        player_it=False,
+        invert_agent_colors=False,
+        display=True,
+        draw_occlusions=True,
     ):
         self.shape = shape
         self.display = display
+        self.draw_occlusions = draw_occlusions
 
         if self.display:
             self.screen = pygame.display.set_mode(shape, flags=pygame.SCALED)
@@ -123,13 +129,14 @@ class TagGame:
         #     Obstacle(75, 75, 50, 50),
         # ]
 
-        self.obstacles = [
-            Obstacle(75, 75, 50, 50),
-            Obstacle(25, 25, 25, 25),
-            Obstacle(150, 25, 25, 25),
-            Obstacle(150, 150, 25, 25),
-            Obstacle(25, 150, 25, 25),
-        ]
+        # self.obstacles = [
+        #     Obstacle(75, 75, 50, 50),
+        #     Obstacle(25, 25, 25, 25),
+        #     Obstacle(150, 25, 25, 25),
+        #     Obstacle(150, 150, 25, 25),
+        #     Obstacle(25, 150, 25, 25),
+        # ]
+        self.obstacles = []
 
         # player and enemy agents
         self.player = Agent.player(position=[100, 50])
@@ -169,15 +176,17 @@ class TagGame:
         for enemy in self.enemies:
             enemy.draw(self.screen)
 
-        self.player.draw_view_occlusion(self.screen, self.screen_rect)
+        if self.draw_occlusions:
+            self.player.draw_view_occlusion(self.screen, self.screen_rect)
         self.player.draw(self.screen)
 
-        for obstacle in self.obstacles:
-            obstacle.draw_occlusion(
-                self.screen,
-                viewpoint=self.player.position,
-                screen_rect=self.screen_rect,
-            )
+        if self.draw_occlusions:
+            for obstacle in self.obstacles:
+                obstacle.draw_occlusion(
+                    self.screen,
+                    viewpoint=self.player.position,
+                    screen_rect=self.screen_rect,
+                )
 
         for obstacle in self.obstacles:
             obstacle.draw(self.screen)
@@ -187,12 +196,7 @@ class TagGame:
 
     def rgb(self):
         """Return the current screen image as a RGB pixel array."""
-        # extract the screen image
-        # this is in channel-first format, which preferred by stable
-        # baselines
-        raw = np.array(pygame.PixelArray(self.screen))
-        rgb = np.array([raw >> 16, raw >> 8, raw], dtype=np.uint8) & 0xFF
-        return rgb
+        return np.array(pygame.surfarray.pixels3d(self.screen), dtype=np.uint8)
 
     def step(self, actions):
         """Step the game forward in time."""

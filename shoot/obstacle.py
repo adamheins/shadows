@@ -74,11 +74,14 @@ class Obstacle(AARect):
                 return unit(point - self.vertices[idx, :])
         return None
 
-    def draw(self, surface):
-        pygame.draw.rect(surface, self.color, self.pygame_rect)
+    def draw(self, surface, scale=1):
+        rect = pygame.Rect(
+            scale * self.x, scale * self.y, scale * self.w, scale * self.h
+        )
+        pygame.draw.rect(surface, self.color, rect)
 
-    def draw_occlusion(self, surface, viewpoint, screen_rect):
+    def draw_occlusion(self, surface, viewpoint, screen_rect, scale=1):
         ps = self._compute_occlusion(viewpoint, screen_rect)
-        pygame.draw.polygon(surface, Color.SHADOW, ps)
+        pygame.draw.polygon(surface, Color.SHADOW, [scale * p for p in ps])
         # pygame.gfxdraw.aapolygon(surface, ps, Color.SHADOW)
         # pygame.gfxdraw.filled_polygon(surface, ps, Color.SHADOW)

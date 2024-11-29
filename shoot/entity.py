@@ -6,9 +6,9 @@ from .collision import Circle, Segment, line_rect_edge_intersection
 from .gui import Color
 
 
-PLAYER_FORWARD_VEL = 150  # px per second
-PLAYER_BACKWARD_VEL = 50  # px per second
-PLAYER_IT_VEL = 100  # px per second
+PLAYER_FORWARD_VEL = 75  # px per second
+PLAYER_BACKWARD_VEL = 30  # px per second
+PLAYER_IT_VEL = 50  # px per second
 PLAYER_ANGVEL = 5  # rad per second
 VIEW_ANGLE = np.pi / 3
 
@@ -44,11 +44,11 @@ class Entity:
 
 
 class Agent(Entity):
-    def __init__(self, position, color, angle=0, it=False):
+    def __init__(self, position, color, radius=AGENT_RADIUS, angle=0, it=False):
         super().__init__(position)
 
         self.color = color
-        self.radius = AGENT_RADIUS
+        self.radius = radius
 
         # in radians, relative to positive x-axis
         self.angle = angle
@@ -64,12 +64,12 @@ class Agent(Entity):
         self.lookback = False
 
     @classmethod
-    def player(cls, position, it=False):
-        return cls(position, color=Color.PLAYER, it=it)
+    def player(cls, position, it=False, **kwargs):
+        return cls(position, color=Color.PLAYER, it=it, **kwargs)
 
     @classmethod
-    def enemy(cls, position, it=False):
-        return cls(position, color=Color.ENEMY, it=it)
+    def enemy(cls, position, it=False, **kwargs):
+        return cls(position, color=Color.ENEMY, it=it, **kwargs)
 
     def rotmat(self):
         return rotmat(self.angle)
@@ -77,12 +77,17 @@ class Agent(Entity):
     def direction(self):
         return self.rotmat()[:, 0]
 
-    def draw(self, surface):
-        if self.it:
-            pygame.draw.circle(surface, Color.OUTLINE, self.position, self.radius + 2)
-        pygame.draw.circle(surface, self.color, self.position, self.radius)
-        endpoint = self.position + self.radius * rotmat(self.angle)[:, 0]
-        pygame.draw.line(surface, Color.DIRECTION, self.position, endpoint, 1)
+    def draw(self, surface, scale=1, draw_direction=True, draw_outline=True):
+        p = scale * self.position
+        r = scale * self.radius
+
+        if draw_outline and self.it:
+            pygame.draw.circle(surface, Color.OUTLINE, p, r + 2 * scale)
+        pygame.draw.circle(surface, self.color, p, r)
+
+        if draw_direction:
+            endpoint = p + r * rotmat(self.angle)[:, 0]
+            pygame.draw.line(surface, Color.DIRECTION, p, endpoint, 1)
 
     def command(self, action):
         self.lookback = action.lookback
@@ -94,7 +99,7 @@ class Agent(Entity):
         if action.reload:
             agent.reload()
 
-        # different speed when "it"
+        # different speed when "it", and when looking backward
         if self.it:
             forward_vel = PLAYER_IT_VEL
         else:
