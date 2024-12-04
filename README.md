@@ -1,21 +1,19 @@
-## Setup
-Setup Python 3.9:
-```
-pyenv install 3.9
-pyenv local 3.9
-poetry env use 3.9
-```
+# Shadows
 
-## Goal
-* Simple game with AI-trained opponent
-* Ideally, I could get this running in the browser for super easy sharing
+Small 2D games with computer opponents trained using reinforcement
+learning.
+
+## Setup
+Note that Python 3.9 or greater is required.
+```
+git clone git@github.com:adamheins/shadows
+cd shadows
+poetry install
+```
 
 ## Todo
-* Rename to shadows
 * Port to JS
-
-## Bugs
-* action IDs may not map properly to agent indices
+* Fix action IDs: they may not map properly to agent indices
 
 ## Other ideas
 * shooting makes you visible
