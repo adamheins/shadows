@@ -41,6 +41,8 @@ class TagAIPolicy:
             angvel = 1
         elif a > np.pi:
             angvel = -1
+        else:
+            angvel = 0
 
         return {
             self.agent.id: Action(
@@ -140,8 +142,8 @@ class TagGame:
         ]
 
         # player and enemy agents
-        self.player = Agent.player(position=[10, 10], radius=3, it=False)
-        self.enemy = Agent.enemy(position=[40, 40], radius=3, it=True)
+        self.player = Agent.player(position=[10, 25], radius=3, it=False)
+        self.enemy = Agent.enemy(position=[40, 25], radius=3, it=True)
         self.agents = [self.player, self.enemy]
         self.it_id = 1
 
@@ -195,12 +197,13 @@ class TagGame:
         #     scale=scale,
         # )
 
+        # TODO this is wrong because it does not scale properly
         for obstacle in self.obstacles:
             obstacle.draw(surface=screen, scale=scale)
-            print(viewpoint)
             obstacle.draw_occlusion(
                 surface=screen,
                 viewpoint=viewpoint,
+                # screen_rect=self.screen_rect,  # TODO
                 screen_rect=screen_rect,
                 scale=scale,
             )

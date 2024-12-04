@@ -82,7 +82,7 @@ class Agent(Entity):
         r = scale * self.radius
 
         if draw_outline and self.it:
-            pygame.draw.circle(surface, Color.OUTLINE, p, r + 2 * scale)
+            pygame.draw.circle(surface, Color.OUTLINE, p, r + scale)
         pygame.draw.circle(surface, self.color, p, r)
 
         if draw_direction:
