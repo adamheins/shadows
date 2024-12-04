@@ -104,14 +104,14 @@ class SimpleEnv(gym.Env):
         self.enemy.color = Color.PLAYER
 
         # self.obstacles = []
-        # self.obstacles = [Obstacle(20, 20, 10, 10)]
-        self.obstacles = [
-            Obstacle(20, 20, 10, 10),
-            Obstacle(8, 8, 5, 5),
-            Obstacle(8, 37, 5, 5),
-            Obstacle(37, 37, 5, 5),
-            Obstacle(37, 8, 5, 5),
-        ]
+        self.obstacles = [Obstacle(20, 20, 10, 10)]
+        # self.obstacles = [
+        #     Obstacle(20, 20, 10, 10),
+        #     Obstacle(8, 8, 5, 5),
+        #     Obstacle(8, 37, 5, 5),
+        #     Obstacle(37, 37, 5, 5),
+        #     Obstacle(37, 8, 5, 5),
+        # ]
 
         self.enemy_policy = SimpleNotItPolicy(
             agent=self.enemy,

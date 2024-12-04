@@ -30,21 +30,20 @@ class TagGame:
         display=True,
         model=None,
     ):
-        self.display = display
-
         self.shape = shape
         self.render_shape = tuple(int(RENDER_SCALE * s) for s in self.shape)
 
         self.screen = pygame.Surface(self.shape)
         self.screen_rect = AARect(0, 0, self.shape[0], self.shape[1])
 
-        if self.display:
-            self.render_screen = pygame.display.set_mode(
-                self.render_shape, flags=pygame.SCALED
+        if display:
+            # self.render_screen = pygame.display.set_mode(
+            #     self.render_shape, flags=pygame.SCALED
+            # )
+            self.screen = pygame.display.set_mode(
+                self.shape, flags=pygame.SCALED
             )
-            self.render_screen_rect = AARect(
-                0, 0, self.render_shape[0], self.render_shape[1]
-            )
+            self.render_screen = pygame.Surface(self.render_shape)
 
         self.clock = pygame.time.Clock()
         self.keys_down = set()
@@ -59,13 +58,14 @@ class TagGame:
         #     Obstacle(250, 380, 200, 40),
         # ]
         # self.obstacles = []
-        self.obstacles = [
-            Obstacle(20, 20, 10, 10),
-            Obstacle(8, 8, 5, 5),
-            Obstacle(8, 37, 5, 5),
-            Obstacle(37, 37, 5, 5),
-            Obstacle(37, 8, 5, 5),
-        ]
+        # self.obstacles = [
+        #     Obstacle(20, 20, 10, 10),
+        #     Obstacle(8, 8, 5, 5),
+        #     Obstacle(8, 37, 5, 5),
+        #     Obstacle(37, 37, 5, 5),
+        #     Obstacle(37, 8, 5, 5),
+        # ]
+        self.obstacles = [Obstacle(20, 20, 10, 10)]
 
         # player and enemy agents
         self.player = Agent.player(position=[10, 25], radius=3, it=False)
@@ -114,7 +114,6 @@ class TagGame:
     def _draw(
         self,
         screen,
-        screen_rect,
         viewpoint,
         scale=1,
         draw_direction=True,
@@ -139,21 +138,19 @@ class TagGame:
         #     scale=scale,
         # )
 
-        # TODO this is wrong because it does not scale properly
+        # NOTE screen_rect is always the unscaled version
         for obstacle in self.obstacles:
             obstacle.draw(surface=screen, scale=scale)
             obstacle.draw_occlusion(
                 surface=screen,
                 viewpoint=viewpoint,
-                # screen_rect=self.screen_rect,  # TODO
-                screen_rect=screen_rect,
+                screen_rect=self.screen_rect,
                 scale=scale,
             )
 
     def draw_enemy_screen(self):
         self._draw(
             screen=self.screen,
-            screen_rect=self.screen_rect,
             viewpoint=self.enemy.position,
             scale=1,
             draw_direction=False,
@@ -163,7 +160,6 @@ class TagGame:
     def draw_player_screen(self):
         self._draw(
             screen=self.render_screen,
-            screen_rect=self.render_screen_rect,
             viewpoint=self.player.position,
             scale=RENDER_SCALE,
             draw_direction=True,

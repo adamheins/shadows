@@ -97,11 +97,11 @@ class LearnedTagAIPolicy:
         # TODO need to confirm the colors are right
         gray = np.zeros(self.shape + (1,), dtype=np.uint8)
 
-        player_mask = np.all(rgb == self.agent.color, axis=-1)
-        gray[player_mask, 0] = 1
-
-        enemy_mask = np.all(rgb == self.player.color, axis=-1)
+        enemy_mask = np.all(rgb == self.agent.color, axis=-1)
         gray[enemy_mask, 0] = 2
+
+        player_mask = np.all(rgb == self.player.color, axis=-1)
+        gray[player_mask, 0] = 1
 
         obs_mask = np.all(rgb == Color.OBSTACLE, axis=-1)
         gray[obs_mask, 0] = 3
