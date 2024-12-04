@@ -7,7 +7,7 @@ SCREEN_SHAPE = (200, 200)
 
 def main():
     pygame.init()
-    game = TagGame(shape=SCREEN_SHAPE, display=True)
+    game = TagGame(display=True)
     game.loop()
 
 

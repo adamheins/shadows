@@ -19,6 +19,8 @@ USE_CCD = False
 
 USE_AI_POLICY = True
 
+RENDER_SCALE = 4
+
 
 class TagAIPolicy:
     """Basic AI policy for the tag game."""
@@ -96,23 +98,27 @@ class TagAIPolicy:
 class TagGame:
     def __init__(
         self,
-        shape=(200, 200),
-        player_it=False,
+        shape=(50, 50),
         invert_agent_colors=False,
         display=True,
-        draw_occlusions=True,
     ):
-        self.shape = shape
         self.display = display
-        self.draw_occlusions = draw_occlusions
+
+        self.shape = shape
+        self.render_shape = tuple(int(RENDER_SCALE * s) for s in self.shape)
+
+        self.screen = pygame.Surface(self.shape)
+        self.screen_rect = AARect(0, 0, self.shape[0], self.shape[1])
 
         if self.display:
-            self.screen = pygame.display.set_mode(shape, flags=pygame.SCALED)
-        else:
-            self.screen = pygame.Surface(shape)
-        self.clock = pygame.time.Clock()
-        self.screen_rect = AARect(0, 0, shape[0], shape[1])
+            self.render_screen = pygame.display.set_mode(
+                self.render_shape, flags=pygame.SCALED
+            )
+            self.render_screen_rect = AARect(
+                0, 0, self.render_shape[0], self.render_shape[1]
+            )
 
+        self.clock = pygame.time.Clock()
         self.keys_down = set()
 
         # self.obstacles = [
@@ -124,24 +130,20 @@ class TagGame:
         #     Obstacle(390, 260, 110, 40),
         #     Obstacle(250, 380, 200, 40),
         # ]
-
-        # self.obstacles = [
-        #     Obstacle(75, 75, 50, 50),
-        # ]
-
-        # self.obstacles = [
-        #     Obstacle(75, 75, 50, 50),
-        #     Obstacle(25, 25, 25, 25),
-        #     Obstacle(150, 25, 25, 25),
-        #     Obstacle(150, 150, 25, 25),
-        #     Obstacle(25, 150, 25, 25),
-        # ]
-        self.obstacles = []
+        # self.obstacles = []
+        self.obstacles = [
+            Obstacle(20, 20, 10, 10),
+            Obstacle(8, 8, 5, 5),
+            Obstacle(8, 37, 5, 5),
+            Obstacle(37, 37, 5, 5),
+            Obstacle(37, 8, 5, 5),
+        ]
 
         # player and enemy agents
-        self.player = Agent.player(position=[100, 50])
-        self.enemies = [Agent.enemy(position=[150, 150])]
-        self.agents = [self.player] + self.enemies
+        self.player = Agent.player(position=[10, 10], radius=3, it=False)
+        self.enemy = Agent.enemy(position=[40, 40], radius=3, it=True)
+        self.agents = [self.player, self.enemy]
+        self.it_id = 1
 
         # just for learning purposes
         if invert_agent_colors:
@@ -149,54 +151,109 @@ class TagGame:
             self.enemies[0].color = Color.PLAYER
 
         # id of the agent that is "it"
-        if player_it:
-            self.player.it = True
-            self.it_id = 0
-        else:
-            self.enemies[0].it = True
-            self.it_id = 1
+        # if player_it:
+        #     self.player.it = True
+        #     self.it_id = 0
+        # else:
+        #     self.enemy.it = True
+        #     self.it_id = 1
 
         self.tag_cooldown = 0
 
         self.enemy_policy = TagAIPolicy(
-            agent=self.enemies[0],
+            agent=self.enemy,
             player=self.player,
             obstacles=self.obstacles,
             shape=self.shape,
         )
 
-    def draw(self):
-        """Render the game.
+    def _draw(
+        self,
+        screen,
+        screen_rect,
+        viewpoint,
+        scale=1,
+        draw_direction=True,
+        draw_outline=True,
+    ):
+        screen.fill(Color.BACKGROUND)
 
-        If ``display`` is ``False``, the screen image is returned as an RGB
-        array.
-        """
-        self.screen.fill(Color.BACKGROUND)
+        for agent in self.agents:
+            agent.draw(
+                surface=screen,
+                draw_direction=draw_direction,
+                draw_outline=draw_outline,
+                scale=scale,
+            )
 
-        for enemy in self.enemies:
-            enemy.draw(self.screen)
-
-        if self.draw_occlusions:
-            self.player.draw_view_occlusion(self.screen, self.screen_rect)
-        self.player.draw(self.screen)
-
-        if self.draw_occlusions:
-            for obstacle in self.obstacles:
-                obstacle.draw_occlusion(
-                    self.screen,
-                    viewpoint=self.player.position,
-                    screen_rect=self.screen_rect,
-                )
+        # if self.draw_occlusions:
+        #     self.player.draw_view_occlusion(self.screen, self.screen_rect)
+        # self.player.draw(
+        #     screen,
+        #     draw_direction=draw_direction,
+        #     draw_outline=draw_outline,
+        #     scale=scale,
+        # )
 
         for obstacle in self.obstacles:
-            obstacle.draw(self.screen)
+            obstacle.draw(surface=screen, scale=scale)
+            print(viewpoint)
+            obstacle.draw_occlusion(
+                surface=screen,
+                viewpoint=viewpoint,
+                screen_rect=screen_rect,
+                scale=scale,
+            )
 
-        if self.display:
-            pygame.display.flip()
+    def draw_enemy_screen(self):
+        self._draw(
+            screen=self.screen,
+            screen_rect=self.screen_rect,
+            viewpoint=self.enemy.position,
+            scale=1,
+            draw_direction=False,
+            draw_outline=False,
+        )
 
-    def rgb(self):
-        """Return the current screen image as a RGB pixel array."""
-        return np.array(pygame.surfarray.pixels3d(self.screen), dtype=np.uint8)
+    def draw_player_screen(self):
+        self._draw(
+            screen=self.render_screen,
+            screen_rect=self.render_screen_rect,
+            viewpoint=self.player.position,
+            scale=RENDER_SCALE,
+            draw_direction=True,
+            draw_outline=True,
+        )
+
+    def render_display(self):
+        self.draw_player_screen()
+        pygame.display.flip()
+
+    def _get_rgb(self, screen):
+        """Get RGB pixel values from the given screen."""
+        return np.array(pygame.surfarray.pixels3d(screen), dtype=np.uint8)
+
+    def _get_obs(self):
+        """Construct the current observation."""
+        # TODO move this to the policy
+        rgb = self._get_rgb(self.screen)
+
+        gray = np.zeros(self.shape + (1,), dtype=np.uint8)
+
+        player_mask = np.all(rgb == self.player.color, axis=-1)
+        gray[player_mask, 0] = 1
+
+        enemy_mask = np.all(rgb == self.enemy.color, axis=-1)
+        gray[enemy_mask, 0] = 2
+
+        obs_mask = np.all(rgb == Color.OBSTACLE, axis=-1)
+        gray[obs_mask, 0] = 3
+
+        return {
+            "position": self.enemy.position.astype(np.float32),
+            "angle": np.array([self.enemy.angle], dtype=np.float32),
+            "image": gray,
+        }
 
     def step(self, actions):
         """Step the game forward in time."""
@@ -315,5 +372,5 @@ class TagGame:
             )
 
             self.step(actions)
-            self.draw()
+            self.render_display()
             self.clock.tick(FRAMERATE)

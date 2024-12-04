@@ -85,27 +85,33 @@ class SimpleEnv(gym.Env):
         self._diag = np.linalg.norm(self.shape)
 
         self.screen = pygame.Surface(self.shape)
-
         self.screen_rect = AARect(0, 0, self.shape[0], self.shape[1])
-        self.render_screen_rect = AARect(
-            0, 0, self.render_shape[0], self.render_shape[1]
-        )
 
         if render_mode == "human":
             # self.render_screen = pygame.display.set_mode(self.render_shape)
             self.render_screen = pygame.display.set_mode(
                 self.render_shape, flags=pygame.SCALED
             )
+            self.render_screen_rect = AARect(
+                0, 0, self.render_shape[0], self.render_shape[1]
+            )
 
         self.player = Agent.player(position=[10, 10], radius=3, it=True)
-        self.enemy = Agent.player(position=[40, 40], radius=3)
+        self.enemy = Agent.enemy(position=[40, 40], radius=3)
 
         # just for learning purposes
         self.player.color = Color.ENEMY
         self.enemy.color = Color.PLAYER
 
         # self.obstacles = []
-        self.obstacles = [Obstacle(20, 20, 10, 10)]
+        # self.obstacles = [Obstacle(20, 20, 10, 10)]
+        self.obstacles = [
+            Obstacle(20, 20, 10, 10),
+            Obstacle(8, 8, 5, 5),
+            Obstacle(8, 37, 5, 5),
+            Obstacle(37, 37, 5, 5),
+            Obstacle(37, 8, 5, 5),
+        ]
 
         self.enemy_policy = SimpleNotItPolicy(
             agent=self.enemy,
@@ -344,7 +350,6 @@ class SimpleEnv(gym.Env):
         for obstacle in self.obstacles:
             obstacle.draw(screen, scale=scale)
             if DRAW_OCCLUSIONS:
-                # TODO need scale
                 obstacle.draw_occlusion(
                     screen,
                     viewpoint=self.player.position,

@@ -43,6 +43,11 @@ poetry env use 3.9
   - using enemy speed = 60 and player speed = 50 works well, but upping the
     enemy speed to 75 fails to learn well with 1e7 timesteps (the good run is
     `ppo/Simple-v0_7`
+  - using `ppo/Simple-v0_7` as the starting point for with enemy speed = 75
+    works well; saved in: `ppo/Simple-v0_10`
+  - building once again on `ppo/Simple-v0_10` with only 1e6 timesteps of
+    training, the agent is reasonably good with more obstacles added to the
+    scene (saved in `ppo/Simple-v0_11`)
 
 * idea: train a model to predict where the other agent is despite occlusions
 
