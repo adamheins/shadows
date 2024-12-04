@@ -1,13 +1,22 @@
 #!/usr/bin/env python3
+import argparse
 import pygame
-from shoot import TagGame
 
-SCREEN_SHAPE = (200, 200)
+from stable_baselines3 import PPO
+from shoot import TagGame
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", help="Path to the trained model.")
+    args = parser.parse_args()
+
+    model = None
+    if args.model is not None:
+        model = PPO.load(args.model)
+
     pygame.init()
-    game = TagGame(display=True)
+    game = TagGame(display=True, model=model)
     game.loop()
 
 
