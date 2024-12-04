@@ -3,7 +3,7 @@ import argparse
 import pygame
 
 from stable_baselines3 import PPO
-from shoot import TagGame
+from shadows import TagGame
 
 
 def main():

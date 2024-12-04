@@ -5,7 +5,7 @@ import numpy as np
 
 import gymnasium as gym
 
-from shoot import *
+from shadows import *
 
 
 SCREEN_SHAPE = (500, 500)

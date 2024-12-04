@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "shoot"
+name = "shadows"
 version = "0.1.0"
-description = "A shooter game."
+description = "2D games with learned AI models."
 authors = ["Adam Heins <mail@adamheins.com>"]
 
 [tool.poetry.dependencies]
@@ -10,7 +10,6 @@ pygame = "^2.5.2"
 numpy = "^1.23.5"
 pyyaml = "^6.0.1"
 gymnasium = "^1.0.0"
-# rl-zoo3 = "^2.3.0"
 stable-baselines3 = "^2.4.0"
 
 [tool.poetry.group.dev.dependencies]

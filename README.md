@@ -48,6 +48,9 @@ poetry env use 3.9
   - building once again on `ppo/Simple-v0_10` with only 1e6 timesteps of
     training, the agent is reasonably good with more obstacles added to the
     scene (saved in `ppo/Simple-v0_11`)
+  - a full 1e7 timesteps on top of `v0_10` is `v0_12`
+  - however, `v0_10` seems to perform better when actually playing
+    against me, but there could be come bugs somewhere
 
 * idea: train a model to predict where the other agent is despite occlusions
 
