@@ -1,3 +1,4 @@
+"""Check that env looks as it should."""
 import argparse
 import numpy as np
 import gymnasium as gym
@@ -13,7 +14,7 @@ import IPython
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("env", help="Environment name.")
-    parser.add_argument("--seed", default=0, help="Random seed.")
+    parser.add_argument("--seed", type=int, default=0, help="Random seed.")
     args = parser.parse_args()
 
     # make the env and check that it is okay

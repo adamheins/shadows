@@ -20,7 +20,7 @@ APPEND_POSITION_TO_STATE = True
 USE_LOCAL_FRAME_ACTIONS = True
 DRAW_DIRECTION = False
 DRAW_OCCLUSIONS = True
-USE_AI_POLICY = True
+USE_AI_POLICY = False
 VERBOSE = True
 
 # scale up rendering by this value
@@ -170,14 +170,14 @@ class SimpleEnv(gym.Env):
         if self.grayscale:
             gray = np.zeros(self.shape + (1,), dtype=np.uint8)
 
-            player_mask = np.all(rgb == self.player.color, axis=-1)
-            gray[player_mask, 0] = 1
+            player_mask = np.all(rgb == Color.ENEMY, axis=-1)
+            gray[player_mask, 0] = 85
 
-            enemy_mask = np.all(rgb == self.enemy.color, axis=-1)
-            gray[enemy_mask, 0] = 2
+            enemy_mask = np.all(rgb == Color.PLAYER, axis=-1)
+            gray[enemy_mask, 0] = 170
 
             obs_mask = np.all(rgb == Color.OBSTACLE, axis=-1)
-            gray[obs_mask, 0] = 3
+            gray[obs_mask, 0] = 255
 
             img = gray
         else:

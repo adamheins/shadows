@@ -1,8 +1,9 @@
+"""Plot reward curves from training."""
 import argparse
 from pathlib import Path
 
 import numpy as np
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
 
 from stable_baselines3.common import results_plotter
 from stable_baselines3.common.monitor import load_results
@@ -43,11 +44,6 @@ def main():
     plt.grid()
 
     plt.show()
-
-    # results_plotter.plot_results(
-    #     [args.log_dir], num_timesteps=None, x_axis=results_plotter.X_TIMESTEPS, task_name="Learning Curve",
-    # )
-    # plt.show()
 
 
 if __name__ == "__main__":

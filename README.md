@@ -51,6 +51,8 @@ poetry install
     against me, but there could be come bugs somewhere
 
 * idea: train a model to predict where the other agent is despite occlusions
+* differences between custom and rl_zoo implementations
+  - mine is about half the speed for some reason
 
 ## Possible other games
 ### Shooting Game

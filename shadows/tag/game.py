@@ -37,13 +37,13 @@ class TagGame:
         self.screen_rect = AARect(0, 0, self.shape[0], self.shape[1])
 
         if display:
-            # self.render_screen = pygame.display.set_mode(
-            #     self.render_shape, flags=pygame.SCALED
-            # )
-            self.screen = pygame.display.set_mode(
-                self.shape, flags=pygame.SCALED
+            self.render_screen = pygame.display.set_mode(
+                self.render_shape, flags=pygame.SCALED
             )
-            self.render_screen = pygame.Surface(self.render_shape)
+            # self.screen = pygame.display.set_mode(
+            #     self.shape, flags=pygame.SCALED
+            # )
+            # self.render_screen = pygame.Surface(self.render_shape)
 
         self.clock = pygame.time.Clock()
         self.keys_down = set()
