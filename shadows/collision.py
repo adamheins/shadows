@@ -244,34 +244,77 @@ def point_poly_query(point, poly):
     : CollisionQuery
         The collision information between the two shapes.
     """
-    min_depth = np.inf
-    normal = None
-    for v, n in zip(poly.vertices, poly.in_normals):
-        depth = (point - v) @ n
-        if depth < min_depth:
-            min_depth = depth
-            normal = -n
+    # min_depth = np.inf
+    # normal = None
+    # for v, n in zip(poly.vertices, poly.in_normals):
+    #     depth = (point - v) @ n
+    #     if depth < min_depth:
+    #         min_depth = depth
+    #         normal = -n
 
     # depth must be non-negative for all normals for point to be inside the
     # polygon
-    if min_depth >= 0:
+    # if min_depth >= 0:
+    #     return CollisionQuery(
+    #         distance=0, p1=point, p2=point, normal=normal, intersect=True
+    #     )
+
+    depths = np.array([(point - v) @ n for v, n in zip(poly.vertices, poly.in_normals)])
+    min_idx = np.argmin(depths)
+    if np.all(depths >= 0):
+        normal = poly.out_normals[min_idx]
         return CollisionQuery(
             distance=0, p1=point, p2=point, normal=normal, intersect=True
         )
 
-    # otherwise the point is outside the polygon
-    # return the query for the closest edge
-    min_dist_query = point_segment_query(point, poly.edges[0])
-    min_dist_query.normal = unit(point - min_dist_query.p2)
-    for i, edge in enumerate(poly.edges[1:]):
-        Q = point_segment_query(point, edge)
-        if Q.intersect:
-            Q.normal = poly.out_normals[i + 1]
-            return Q
-        if Q.distance < min_dist_query.distance:
-            Q.normal = unit(point - Q.p2)
-            min_dist_query = Q
-    return min_dist_query
+    # detect if a vertex is the closest point
+    n = len(poly.vertices)
+    prev_idx = (min_idx - 1) % n
+    next_idx = (min_idx + 1) % n
+    if depths[prev_idx] < 0 or depths[next_idx] < 0:
+        if depths[prev_idx] < 0:
+            v = poly.vertices[min_idx]
+        else:
+            v = poly.vertices[next_idx]
+        dist = np.linalg.norm(point - v)
+        normal = (point - v) / dist
+        return CollisionQuery(
+            distance=dist, p1=point, p2=v, normal=normal, intersect=False
+        )
+
+    # otherwise we know the closest point lies on the segment
+    return point_segment_query(point, poly.edges[min_idx])
+
+    # # otherwise the point is outside the polygon
+    # # return the query for the closest edge
+    # min_dist_query = point_segment_query(point, poly.edges[0])
+    # min_dist_query.normal = unit(point - min_dist_query.p2)
+    # for i, edge in enumerate(poly.edges[1:]):
+    #     Q = point_segment_query(point, edge)
+    #     if Q.intersect:
+    #         Q.normal = poly.out_normals[i + 1]
+    #         return Q
+    #     if Q.distance < min_dist_query.distance:
+    #         Q.normal = unit(point - Q.p2)
+    #         min_dist_query = Q
+    # return min_dist_query
+
+
+def point_rect_query(point, rect):
+    # TODO more efficient
+    in_x = point[0] >= rect.x and point[0] <= rect.x + rect.w
+    in_y = point[1] >= rect.y and point[1] <= rect.y + rect.h
+
+    # edge_dists = np.array([
+    #     point[0] - rect.x - rect.w,
+    #     point[0] - rect.x,
+    #     point[1] - rect.y - rect.h,
+    #     point[1] - rect.y,
+    # ])
+    # out_normals = np.array([[1, 0], [-1, 0], [0, 1], [0, -1]])
+    # if np.any(edges_dists <= 
+
+    vert_dists = np.linalg.norm(point - rect.vertices, axis=1)
 
 
 def segment_circle_query(segment, circle):
