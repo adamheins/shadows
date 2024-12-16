@@ -49,10 +49,24 @@ poetry install
   - a full 1e7 timesteps on top of `v0_10` is `v0_12`
   - however, `v0_10` seems to perform better when actually playing
     against me, but there could be come bugs somewhere
+* For partially-observable environments in particular, using a stochastic
+  policy is often better (see
+  <https://github.com/DLR-RM/stable-baselines3/issues/1063>)
+* could also try with SAC if I use the target position
+  - this does not work at all
+* is the max episode length a problem?
+  - making it 1000 does not really improve anything
 
 * idea: train a model to predict where the other agent is despite occlusions
-* differences between custom and rl_zoo implementations
-  - mine is about half the speed for some reason
+* need to somehow get diffusion going too
+* try changing network architecture, doing hyperparameter sweep
+
+* can I somehow shift the burden off the RL agent? can I just learn a
+  residual?
+  - if I can see enemy pixels, just steer toward enemy, else use RL
+    policy
+* try QR-DQN from contrib repo
+    
 
 ## Possible other games
 ### Shooting Game
@@ -61,6 +75,7 @@ poetry install
 * clip size is very limited (same size as max health?), so one needs to reload
   often
 * can find health scattered about the map to recover
+* enable strafing
 
 ### Other
 * Another idea for a game is to have one applying force to some body while

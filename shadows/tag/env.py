@@ -159,7 +159,7 @@ class TagItEnv(gym.Env):
             # while True:
             for i in range(n):
                 r = agent.radius
-                agent.position = self.np_random.uniform(low=(r, r), high=(w - r, h - r))
+                agent.position = self.np_random.uniform(low=(0, 0), high=(w, h))
                 collision = False
 
                 # check for collision with other agents

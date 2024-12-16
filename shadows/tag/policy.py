@@ -6,6 +6,8 @@ from ..entity import Action
 from ..gui import Color
 
 
+USE_TARGET_AS_ACTION = False
+
 class TagAIPolicy:
     """Basic AI policy for the tag game."""
 
@@ -113,26 +115,59 @@ class LearnedTagAIPolicy:
         }
 
     def _translate_action(self, action):
-        if action == 0:
-            angdir = 1
-        elif action == 1:
-            angdir = 0
-        elif action == 2:
-            angdir = -1
+        if USE_TARGET_AS_ACTION:
+            assert len(action) == 2
+            target = 0.5 * (action + 1) * self.shape
+            r = target - self.player.position
 
-        return Action(
-            lindir=[1, 0],
-            angdir=angdir,
-            target=None,
-            reload=False,
-            frame=Action.LOCAL,
-            lookback=False,
-        )
+            # don't go anywhere if target is on top of the player
+            if np.linalg.norm(r) < self.player.radius:
+                linvel = 0
+            else:
+                linvel = 1
+
+            # steer toward the player
+            a = angle2pi(r, start=self.player.angle)
+            if a < np.pi:
+                angvel = 1
+            elif a > np.pi:
+                angvel = -1
+            else:
+                angvel = 0
+
+            return Action(
+                lindir=[linvel, 0],
+                angdir=angvel,
+                target=None,
+                reload=False,
+                frame=Action.LOCAL,
+            )
+        else:
+            if action == 0:
+                angdir = 1
+            elif action == 1:
+                angdir = 0
+            elif action == 2:
+                angdir = -1
+
+            return Action(
+                lindir=[1, 0],
+                angdir=angdir,
+                target=None,
+                reload=False,
+                frame=Action.LOCAL,
+                lookback=False,
+            )
 
     def _it_policy(self):
         """Policy for the agent that is "it"."""
         obs = self._get_obs()
-        action, _ = self.model.predict(obs, deterministic=True)
+        img = obs["image"].squeeze()
+        player_mask = img == 170
+        if np.any(player_mask):
+            # TODO steer toward the centroid of the mask
+            pass
+        action, _ = self.model.predict(obs, deterministic=False)
         return self._translate_action(action)
 
     def _not_it_policy(self):

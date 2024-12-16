@@ -16,8 +16,8 @@ TAG_COOLDOWN = 120  # ticks
 
 # for more efficiency we can turn off continuous collision detection
 USE_CCD = False
-
 USE_AI_POLICY = True
+ALLOW_TAG_SWITCH = True
 
 RENDER_SCALE = 4
 
@@ -58,14 +58,14 @@ class TagGame:
         #     Obstacle(250, 380, 200, 40),
         # ]
         # self.obstacles = []
-        # self.obstacles = [
-        #     Obstacle(20, 20, 10, 10),
-        #     Obstacle(8, 8, 5, 5),
-        #     Obstacle(8, 37, 5, 5),
-        #     Obstacle(37, 37, 5, 5),
-        #     Obstacle(37, 8, 5, 5),
-        # ]
-        self.obstacles = [Obstacle(20, 20, 10, 10)]
+        self.obstacles = [
+            Obstacle(20, 20, 10, 10),
+            Obstacle(8, 8, 5, 5),
+            Obstacle(8, 37, 5, 5),
+            Obstacle(37, 37, 5, 5),
+            Obstacle(37, 8, 5, 5),
+        ]
+        # self.obstacles = [Obstacle(20, 20, 10, 10)]
 
         # player and enemy agents
         self.player = Agent.player(position=[10, 25], radius=3, it=False)
@@ -118,6 +118,7 @@ class TagGame:
         scale=1,
         draw_direction=True,
         draw_outline=True,
+        draw_occlusion=True,
     ):
         screen.fill(Color.BACKGROUND)
 
@@ -141,12 +142,13 @@ class TagGame:
         # NOTE screen_rect is always the unscaled version
         for obstacle in self.obstacles:
             obstacle.draw(surface=screen, scale=scale)
-            obstacle.draw_occlusion(
-                surface=screen,
-                viewpoint=viewpoint,
-                screen_rect=self.screen_rect,
-                scale=scale,
-            )
+            if draw_occlusion:
+                obstacle.draw_occlusion(
+                    surface=screen,
+                    viewpoint=viewpoint,
+                    screen_rect=self.screen_rect,
+                    scale=scale,
+                )
 
     def draw_enemy_screen(self):
         self._draw(
@@ -155,6 +157,7 @@ class TagGame:
             scale=1,
             draw_direction=False,
             draw_outline=False,
+            draw_occlusion=True,
         )
 
     def draw_player_screen(self):
@@ -258,6 +261,12 @@ class TagGame:
                     self.keys_down.add(event.key)
                 elif event.type == pygame.KEYUP:
                     self.keys_down.discard(event.key)
+
+                    # manually switch who is it, for testing purposes
+                    if ALLOW_TAG_SWITCH and event.key == pygame.K_t:
+                        self.it_id = (self.it_id + 1) % len(self.agents)
+                        self.agents[0].it = not self.agents[0].it
+                        self.agents[1].it = not self.agents[1].it
 
             # respond to events
             lindir = 0

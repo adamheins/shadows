@@ -5,7 +5,7 @@ import gymnasium as gym
 from ..entity import Agent, Action
 from ..gui import Color
 from ..obstacle import Obstacle
-from ..collision import point_poly_query, AARect
+from ..collision import point_in_rect, point_poly_query, AARect
 from ..math import *
 
 
@@ -14,17 +14,38 @@ TIMESTEP = 1.0 / FRAMERATE
 
 SHAPE = (50, 50)
 
-MAX_STEPS_PER_EPISODE = 500
+MAX_STEPS_PER_EPISODE = 1000
+
+# don't move the enemy between episodes
 FIX_ENEMY_POSITION = False
+
+# only place the enemy in corners
+ENEMY_ONLY_IN_CORNERS = False
+
+# include the player's position and angle in the observation
 APPEND_POSITION_TO_STATE = True
+
+# use local frame for movement rather than the world frame
 USE_LOCAL_FRAME_ACTIONS = True
+
+# use a position target as the action rather than velocity commands
+USE_TARGET_AS_ACTION = False
+
+# draw the direction line onto the agents
 DRAW_DIRECTION = False
+
+# draw occlusions behind obstacles
 DRAW_OCCLUSIONS = True
 USE_AI_POLICY = False
 VERBOSE = True
 
+# render the grayscale observation directly, rather than a
+# nice-looking human version. RENDER_SCALE should be set to 1 if this
+# is True.
+RENDER_OBSERVATION = False
+
 # scale up rendering by this value
-RENDER_SCALE = 4
+RENDER_SCALE = 1
 
 
 class SimpleNotItPolicy:
@@ -97,21 +118,21 @@ class SimpleEnv(gym.Env):
             )
 
         self.player = Agent.player(position=[10, 10], radius=3, it=True)
-        self.enemy = Agent.enemy(position=[40, 40], radius=3)
+        self.enemy = Agent.enemy(position=[47, 47], radius=3)
 
         # just for learning purposes
         self.player.color = Color.ENEMY
         self.enemy.color = Color.PLAYER
 
         # self.obstacles = []
-        self.obstacles = [Obstacle(20, 20, 10, 10)]
-        # self.obstacles = [
-        #     Obstacle(20, 20, 10, 10),
-        #     Obstacle(8, 8, 5, 5),
-        #     Obstacle(8, 37, 5, 5),
-        #     Obstacle(37, 37, 5, 5),
-        #     Obstacle(37, 8, 5, 5),
-        # ]
+        # self.obstacles = [Obstacle(20, 20, 10, 10)]
+        self.obstacles = [
+            Obstacle(20, 20, 10, 10),
+            Obstacle(8, 8, 5, 5),
+            Obstacle(8, 37, 5, 5),
+            Obstacle(37, 37, 5, 5),
+            Obstacle(37, 8, 5, 5),
+        ]
 
         self.enemy_policy = SimpleNotItPolicy(
             agent=self.enemy,
@@ -120,7 +141,14 @@ class SimpleEnv(gym.Env):
             shape=self.shape,
         )
 
-        if USE_LOCAL_FRAME_ACTIONS:
+        if USE_TARGET_AS_ACTION:
+            self.action_space = gym.spaces.Box(
+                low=-np.ones(2, dtype=np.float32),
+                high=np.ones(2, dtype=np.float32),
+                shape=(2,),
+                dtype=np.float32,
+            )
+        elif USE_LOCAL_FRAME_ACTIONS:
             self.action_space = gym.spaces.Discrete(3)
         else:
             self.action_space = gym.spaces.Discrete(4)
@@ -192,7 +220,33 @@ class SimpleEnv(gym.Env):
         return img
 
     def _translate_action(self, action):
-        if USE_LOCAL_FRAME_ACTIONS:
+        if USE_TARGET_AS_ACTION:
+            target = 0.5 * (action + 1) * self.shape
+            r = target - self.player.position
+
+            # don't go anywhere if target is on top of the player
+            if np.linalg.norm(r) < self.player.radius:
+                linvel = 0
+            else:
+                linvel = 1
+
+            # steer toward the player
+            a = angle2pi(r, start=self.player.angle)
+            if a < np.pi:
+                angvel = 1
+            elif a > np.pi:
+                angvel = -1
+            else:
+                angvel = 0
+
+            return Action(
+                lindir=[linvel, 0],
+                angdir=angvel,
+                target=None,
+                reload=False,
+                frame=Action.LOCAL,
+            )
+        elif USE_LOCAL_FRAME_ACTIONS:
             if action < 3:
                 lindir = 1
             else:
@@ -241,22 +295,48 @@ class SimpleEnv(gym.Env):
         w, h = self.shape
 
         agents = [self.player]
-        if not FIX_ENEMY_POSITION:
+        if not FIX_ENEMY_POSITION and not ENEMY_ONLY_IN_CORNERS:
             agents.append(self.enemy)
 
-        for agent in agents:
+        if ENEMY_ONLY_IN_CORNERS:
+            corner = self.np_random.integers(4)
+            if corner == 0:
+                p = (3, 3)
+            elif corner == 1:
+                p = (3, 47)
+            elif corner == 2:
+                p = (47, 3)
+            else:
+                p = (47, 47)
+            self.enemy.position = np.array(p)
+
+        for agent_idx, agent in enumerate(agents):
             if USE_LOCAL_FRAME_ACTIONS:
                 agent.angle = self.np_random.uniform(low=-np.pi, high=np.pi)
 
             # generate collision-free position for each agent
             while True:
-                agent.position = self.np_random.uniform(low=(r, r), high=(w - r, h - r))
+                agent.position = self.np_random.uniform(low=(0, 0), high=(w, h))
+
+                # avoid collision with obstacles
                 collision = False
                 for obstacle in self.obstacles:
-                    Q = point_poly_query(agent.position, obstacle)
-                    if Q.distance <= r:
+                    # Q = point_poly_query(agent.position, obstacle)
+                    # if Q.distance <= r:
+                    #     collision = True
+                    #     break
+                    if point_in_rect(agent.position, obstacle):
                         collision = True
                         break
+
+                # avoid collision with other agents
+                if agent_idx > 0:
+                    for other in agents[:agent_idx]:
+                        d = np.linalg.norm(agent.position - other.position)
+                        if d <= 2 * r:
+                            collision = True
+                            break
+
                 if not collision:
                     break
 
@@ -325,11 +405,18 @@ class SimpleEnv(gym.Env):
             reward += F
             # reward = 1 if terminated else -0.01 * d
 
+        # if USE_TARGET_AS_ACTION:
+        #     reward = -np.linalg.norm(self.enemy.position - action)
+
         if VERBOSE and terminated:
             print("tagged!")
             print(f"  steps = {self._steps}")
             print(f"  d = {d}")
             print(f"  r = {reward}")
+
+        # if VERBOSE and (terminated or truncated):
+        #     print(f"  a = {action}")
+        #     print(f"  t = {self.enemy.position}")
 
         self._draw(self.screen, self.screen_rect)
         obs = self._get_obs()
@@ -358,7 +445,18 @@ class SimpleEnv(gym.Env):
                 )
 
     def render(self):
-        self._draw(self.render_screen, self.render_screen_rect, scale=RENDER_SCALE)
+        if RENDER_OBSERVATION:
+            # 2D grayscale array
+            img = self._get_obs()["image"].squeeze()
+
+            # make into RGB array but still grayscale, so pygame can
+            # render it properly
+            rgb = np.stack([img, img, img], axis=-1)
+            surf = pygame.surfarray.make_surface(rgb)
+            self.render_screen.blit(surf, dest=(0, 0))
+        else:
+            # draw the human-friendly version
+            self._draw(self.render_screen, self.render_screen_rect, scale=RENDER_SCALE)
 
         if self.render_mode == "human":
             pygame.display.flip()

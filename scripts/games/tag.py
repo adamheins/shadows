@@ -2,7 +2,7 @@
 import argparse
 import pygame
 
-from stable_baselines3 import PPO
+from stable_baselines3 import DQN, PPO
 from shadows import TagGame
 
 
@@ -13,7 +13,7 @@ def main():
 
     model = None
     if args.model is not None:
-        model = PPO.load(args.model)
+        model = DQN.load(args.model)
 
     pygame.init()
     game = TagGame(display=True, model=model)
