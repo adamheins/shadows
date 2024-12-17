@@ -1550,6 +1550,20 @@ typing-extensions = {version = ">=4.0.0,<5.0", markers = "python_version < \"3.1
 jupyter = ["ipywidgets (>=7.5.1,<9)"]
 
 [[package]]
+name = "sb3-contrib"
+version = "2.4.0"
+description = "Contrib package of Stable Baselines3, experimental code."
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "sb3_contrib-2.4.0-py3-none-any.whl", hash = "sha256:725d90157028a94c69804f2e7332128518fb7cbab39e7e141d2d0355547a72ab"},
+    {file = "sb3_contrib-2.4.0.tar.gz", hash = "sha256:a3709d97ddd529c45e3d56a5ae7e61a380bb2e11bacb9a3e6951ac0c481350ca"},
+]
+
+[package.dependencies]
+stable-baselines3 = ">=2.4.0,<3.0"
+
+[[package]]
 name = "setuptools"
 version = "75.6.0"
 description = "Easily download, build, install, upgrade, and uninstall Python packages"
@@ -1830,4 +1844,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<3.13"
-content-hash = "af844660ed16f351263e8c61ca8e6e91feba3629c778069b19fada846f2de5b8"
+content-hash = "03ef8b8f270ce942a4963ef634cd39f890e6d7e4dfdb27cca0d0fbe9b4a9017f"

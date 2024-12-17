@@ -51,6 +51,7 @@ def test_point_poly_query():
     Q = shadows.point_poly_query((110, 50), rect)
     assert not Q.intersect
     assert np.isclose(Q.distance, 10)
+    print(Q)
     assert np.allclose(Q.normal, [1, 0])
 
     Q = shadows.point_poly_query((110, 110), rect)

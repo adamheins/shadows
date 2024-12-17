@@ -11,6 +11,7 @@ numpy = "^1.23.5"
 pyyaml = "^6.0.1"
 gymnasium = "^1.0.0"
 stable-baselines3 = {extras = ["extra"], version = "^2.4.0"}
+sb3-contrib = "^2.4.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"

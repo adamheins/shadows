@@ -12,9 +12,7 @@ class Obstacle(AARect):
         self.color = Color.OBSTACLE
         self.pygame_rect = pygame.Rect(x, y, w, h)
 
-    def _compute_witness_vertices(self, point, tol=1e-3):
-        # TODO can this be improved?
-
+    def _compute_witness_vertices(self, point):
         # the normal can be computed with any point in the obstacle
         normal = orth(self.vertices[0] - point)
         dists = (self.vertices - point) @ normal
@@ -22,23 +20,8 @@ class Obstacle(AARect):
         right = self.vertices[np.argmin(dists), :]
         return right, left
 
-        # right = None
-        # left = None
-        # for i in range(len(self.vertices)):
-        #     vert = self.vertices[i]
-        #     delta = vert - point
-        #     normal = orth(delta)
-        #     dists = (self.vertices - point) @ normal
-        #     if np.all(dists >= -tol):
-        #         right = vert
-        #     elif np.all(dists <= tol):
-        #         left = vert
-        #     if left is not None and right is not None:
-        #         break
-        # return right, left
-
-    def _compute_occlusion(self, point, screen_rect, tol=1e-3):
-        right, left = self._compute_witness_vertices(point, tol=tol)
+    def _compute_occlusion(self, point, screen_rect):
+        right, left = self._compute_witness_vertices(point)
 
         delta_right = right - point
         extra_right = line_rect_edge_intersection(right, delta_right, screen_rect)

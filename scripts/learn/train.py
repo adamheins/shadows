@@ -16,6 +16,8 @@ from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.vec_env import VecTransposeImage
 from stable_baselines3.common.noise import NormalActionNoise
 
+from sb3_contrib import QRDQN
+
 import shadows
 
 
@@ -56,57 +58,58 @@ def make_log_dir(env_name, log_dir_root):
 
 
 def make_model(algo_name, env, seed, trained_agent=None):
+    kwargs = dict(policy="MultiInputPolicy", env=env, seed=seed, verbose=1)
+
     algo_name = algo_name.lower()
-    if algo_name == "dqn":
-        algo = DQN
-        kwargs = dict(
-            policy="MultiInputPolicy",
-            env=env,
-            seed=seed,
-            buffer_size=100000,
-            learning_rate=1e-4,
-            batch_size=32,
-            learning_starts=100000,
-            target_update_interval=1000,
-            train_freq=4,
-            gradient_steps=1,
-            exploration_fraction=0.5,
-            exploration_final_eps=0.01,
-            verbose=1,
+    if algo_name == "dqn" or algo_name == "qrdqn":
+        if algo_name == "dqn":
+            algo = DQN
+        else:
+            algo = QRDQN
+        kwargs.update(
+            dict(
+                buffer_size=100000,
+                learning_rate=1e-4,
+                batch_size=32,
+                learning_starts=100000,
+                target_update_interval=1000,
+                train_freq=4,
+                gradient_steps=1,
+                exploration_fraction=0.5,
+                exploration_final_eps=0.01,
+            )
         )
     elif algo_name == "ppo":
         algo = PPO
-        kwargs = dict(
-            env=env,
-            seed=seed,
-            policy="MultiInputPolicy",
-            n_steps=128,
-            n_epochs=4,
-            batch_size=256,
-            learning_rate=linear_schedule(2.5e-4),
-            clip_range=linear_schedule(0.1),
-            vf_coef=0.5,
-            ent_coef=0.01,
-            verbose=1,
+        kwargs.update(
+            dict(
+                n_steps=128,
+                n_epochs=4,
+                batch_size=256,
+                learning_rate=linear_schedule(2.5e-4),
+                clip_range=linear_schedule(0.1),
+                vf_coef=0.5,
+                ent_coef=0.01,
+            )
         )
-    elif algo_name == "td3":
-        algo = TD3
-        na = env.action_space.shape[0]
-        noise = NormalActionNoise(mean=np.zeros(na), sigma=0.1 * np.ones(na))
-        kwargs = dict(
-            env=env,
-            seed=seed,
-            policy="MultiInputPolicy",
-            gamma=0.98,
-            buffer_size=200000,
-            learning_starts=10000,
-            action_noise=noise,
-            gradient_steps=1,
-            train_freq=1,
-            learning_rate=1e-3,
-            policy_kwargs=dict(net_arch=[400, 300]),
-            verbose=1,
-        )
+    # elif algo_name == "td3":
+    #     algo = TD3
+    #     na = env.action_space.shape[0]
+    #     noise = NormalActionNoise(mean=np.zeros(na), sigma=0.1 * np.ones(na))
+    #     kwargs = dict(
+    #         env=env,
+    #         seed=seed,
+    #         policy="MultiInputPolicy",
+    #         gamma=0.98,
+    #         buffer_size=200000,
+    #         learning_starts=10000,
+    #         action_noise=noise,
+    #         gradient_steps=1,
+    #         train_freq=1,
+    #         learning_rate=1e-3,
+    #         policy_kwargs=dict(net_arch=[400, 300]),
+    #         verbose=1,
+    #     )
     else:
         raise ValueError(f"unknown model type: {algo_name}")
 
