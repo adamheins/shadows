@@ -13,20 +13,29 @@ class Obstacle(AARect):
         self.pygame_rect = pygame.Rect(x, y, w, h)
 
     def _compute_witness_vertices(self, point, tol=1e-3):
-        right = None
-        left = None
-        for i in range(len(self.vertices)):
-            vert = self.vertices[i]
-            delta = vert - point
-            normal = orth(delta)
-            dists = (self.vertices - point) @ normal
-            if np.all(dists >= -tol):
-                right = vert
-            elif np.all(dists <= tol):
-                left = vert
-            if left is not None and right is not None:
-                break
+        # TODO can this be improved?
+
+        # the normal can be computed with any point in the obstacle
+        normal = orth(self.vertices[0] - point)
+        dists = (self.vertices - point) @ normal
+        left = self.vertices[np.argmax(dists), :]
+        right = self.vertices[np.argmin(dists), :]
         return right, left
+
+        # right = None
+        # left = None
+        # for i in range(len(self.vertices)):
+        #     vert = self.vertices[i]
+        #     delta = vert - point
+        #     normal = orth(delta)
+        #     dists = (self.vertices - point) @ normal
+        #     if np.all(dists >= -tol):
+        #         right = vert
+        #     elif np.all(dists <= tol):
+        #         left = vert
+        #     if left is not None and right is not None:
+        #         break
+        # return right, left
 
     def _compute_occlusion(self, point, screen_rect, tol=1e-3):
         right, left = self._compute_witness_vertices(point, tol=tol)
@@ -54,25 +63,6 @@ class Obstacle(AARect):
                     screen_vs.append(v)
 
         return [right, extra_right] + screen_vs + [extra_left, left]
-
-    def compute_collision_normal(self, point, r):
-        if point[0] >= self.x and point[0] <= self.x + self.w:
-            if point[1] >= self.y - r and point[1] <= self.y + 0.5 * self.h:
-                return (0, -1)
-            elif point[1] <= self.y + self.h + r and point[1] > self.y + 0.5 * self.h:
-                return (0, 1)
-        elif point[1] >= self.y and point[1] <= self.y + self.h:
-            if point[0] >= self.x - r and point[0] <= self.x + 0.5 * self.w:
-                return (-1, 0)
-            elif point[0] <= self.x + self.w + r and point[0] > self.x + 0.5 * self.w:
-                return (1, 0)
-        else:
-            # closest point is one of the vertices
-            v2 = np.sum((self.vertices - point) ** 2, axis=1)
-            idx = np.argmin(v2)
-            if v2[idx] <= r**2:
-                return unit(point - self.vertices[idx, :])
-        return None
 
     def draw(self, surface, scale=1):
         rect = pygame.Rect(

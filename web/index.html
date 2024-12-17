@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Shadow Tag</title>
+    <link rel="stylesheet" href="css/shadows.css">
+  </head>
+  <body>
+    <div class="container">
+      <h1>Shadow Tag</h1>
+      <canvas id="canvas" width="50" height="50"></canvas>
+      <div>
+        <p>
+          A game of tag. If you're outlined in yellow, then you're it. Catch the
+          other player to tag them. Otherwise, avoid being caught by the other
+          player!
+        </p>
+        <p>
+          You cannot see behind obstacles. When not it, you can also only see
+          ahead of you, but you can look behind you at the cost of moving
+          slower.
+        </p>
+        <table>
+          <tr>
+            <th>Key</th>
+            <th>Action</th>
+          </tr>
+          <tr>
+            <td>W</td>
+            <td>forward</td>
+          </tr>
+          <tr>
+            <td>S</td>
+            <td>backward</td>
+          </tr>
+          <tr>
+            <td>A</td>
+            <td>turn left</td>
+          </tr>
+          <tr>
+            <td>D</td>
+            <td>turn right</td>
+          </tr>
+          <tr>
+            <td>Space</td>
+            <td>look back (when not it)</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+    <script src="js/shadows.js"></script>
+  </body>
+</html>
