@@ -1,6 +1,7 @@
 import math
 import numpy as np
 
+ORTHMAT = np.array([[0, 1], [-1, 0]])
 
 def unit(v):
     """Normalize to a unit vector."""

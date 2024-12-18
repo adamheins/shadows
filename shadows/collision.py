@@ -71,7 +71,7 @@ class Segment:
 
         self.v = self.end - self.start
         self.direction = unit(self.v)
-        self.normal = unit(orth(self.v))
+        self.normal = orth(self.direction)
 
     def __repr__(self):
         return f"Segment(start={self.start}, end={self.end})"
@@ -247,7 +247,9 @@ def point_poly_query(point, poly):
     # inward-facing depth values for each edge
     depths = np.array([(point - v) @ n for v, n in zip(poly.vertices, poly.in_normals)])
     min_idx = np.argmin(depths)
-    if np.all(depths >= 0):
+
+    # if all depths are positive, then the point is inside the polygon
+    if depths[min_idx] >= 0:
         normal = poly.out_normals[min_idx]
         return CollisionQuery(
             distance=0, p1=point, p2=point, normal=normal, intersect=True

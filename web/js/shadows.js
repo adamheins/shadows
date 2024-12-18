@@ -1,34 +1,3 @@
-function drawCircle(ctx, position, radius, color) {
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(position.x, position.y, radius, 0, 2 * Math.PI);
-    ctx.fill();
-}
-
-function drawPolygon(ctx, vertices, color) {
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(vertices[0].x, vertices[1].y);
-    for (let i = 1; i < vertices.length; i++) {
-        ctx.lineTo(vertices[i].x, vertices[i].y);
-    }
-    ctx.closePath();
-    ctx.fill();
-}
-
-function drawRect(ctx, position, width, height, color) {
-    ctx.fillStyle = color;
-    ctx.fillRect(position.x, position.y, width, height);
-}
-
-function drawLine(ctx, start, end, color) {
-    ctx.strokeStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(start.x, start.y);
-    ctx.lineTo(end.x, end.y);
-    ctx.stroke();
-}
-
 // Action for the agent to take
 class Action {
     constructor(lindir, angdir = 0, localFrame = true, lookback = false) {
@@ -36,33 +5,6 @@ class Action {
         this.angdir = angdir;
         this.localFrame = localFrame;
         this.lookback = lookback;
-    }
-}
-
-class Vec2 {
-    constructor(x, y) {
-        this.x = x;
-        this.y = y;
-    }
-
-    scale(s) {
-        return new Vec2(s * this.x, s * this.y);
-    }
-
-    dot(other) {
-
-    }
-
-    add(other) {
-        return new Vec2(this.x + other.x, this.y + other.y);
-    }
-
-    rotate(angle) {
-        const s = Math.sin(angle);
-        const c = Math.cos(angle);
-        const x = c * this.x + s * this.y;
-        const y = -s * this.x + c * this.y;
-        return new Vec2(x, y);
     }
 }
 
@@ -101,8 +43,10 @@ class Agent {
 
 }
 
-class Obstacle {
+class Obstacle extends AARect {
     constructor(position, width, height) {
+        super(position.x, position.y, width, height);
+
         this.position = position;
         this.width = width;
         this.height = height;
@@ -114,19 +58,72 @@ class Obstacle {
         drawRect(ctx, this.position, this.width, this.height, this.color);
     }
 
-    computeOcclusion(point) {
+    computeWitnessVertices(point) {
+        // the normal can be computed with any point in the obstacle
+        const normal = this.vertices[0].subtract(point).orth();
+        const dists = this.vertices.map(v => v.subtract(point).dot(normal));
 
+        let minIdx = 0;
+        let maxIdx = 0;
+        for (let i = 1; i < this.vertices.length; i++) {
+            if (dists[i] < dists[minIdx]) {
+                minIdx = i;
+            }
+            if (dists[i] > dists[maxIdx]) {
+                maxIdx = i;
+            }
+        }
+
+        const left = this.vertices[maxIdx];
+        const right = this.vertices[minIdx];
+        return [right, left];
     }
 
-    drawOcclusion(ctx, viewpoint) {
+    computeOcclusion(point, screenRect) {
+        const witnesses = this.computeWitnessVertices(point);
+        const right = witnesses[0];
+        const left = witnesses[1];
 
+        const deltaRight = right.subtract(point);
+        const extraRight = lineRectEdgeIntersection(right, deltaRight, screenRect);
+        const normalRight = deltaRight.orth();
+
+        const deltaLeft = left.subtract(point);
+        const extraLeft = lineRectEdgeIntersection(left, deltaLeft, screenRect);
+        const normalLeft = deltaLeft.orth();
+
+        let screenDists = [];
+        let screenVs = [];
+        for (let i = 0; i < screenRect.vertices.length; i++) {
+            const v = screenRect.vertices[i];
+            if (-v.subtract(point).dot(normalLeft) < 0) {
+                continue;
+            }
+            const dist = v.subtract(point).dot(normalRight);
+            if (dist >= 0) {
+                if (screenDists.length > 0 && screenDists[0] > dist) {
+                    screenVs = [v, screenVs[0]];
+                    break;
+                } else {
+                    screenDists.push(dist);
+                    screenVs.push(v);
+                }
+            }
+        }
+        return [right, extraRight].concat(screenVs).concat([extraLeft, left]);
+    }
+
+    drawOcclusion(ctx, viewpoint, screenRect) {
+        const vertices = this.computeOcclusion(viewpoint, screenRect);
+        drawPolygon(ctx, vertices, this.color);
     }
 }
 
-class Game {
+class TagGame {
     constructor(width, height) {
         this.width = width;
         this.height = height;
+        this.screenRect = new AARect(0, 0, width, height);
 
         this.keyMap = new Map();
 
@@ -152,6 +149,7 @@ class Game {
         })
         this.obstacles.forEach(obstacle => {
             obstacle.draw(ctx);
+            obstacle.drawOcclusion(ctx, this.player.position, this.screenRect);
         });
     }
 
@@ -194,6 +192,18 @@ class Game {
                 v.y = Math.max(0, v.y);
             }
 
+            let normal = null;
+            this.obstacles.forEach(obstacle => {
+                let Q = pointPolyQuery(agent.position, obstacle);
+                if (Q.distance < agent.radius) {
+                    normal = Q.normal;
+                }
+            });
+            if (normal && normal.dot(v) < 0) {
+                const tan = normal.orth();
+                v = tan.scale(tan.dot(v));
+            }
+
             agent.velocity = v;
         });
 
@@ -207,7 +217,7 @@ function main() {
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
 
-    const game = new Game(50, 50);
+    const game = new TagGame(50, 50);
 
     setInterval(() => {
         game.step();
