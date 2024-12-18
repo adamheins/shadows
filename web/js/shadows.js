@@ -58,24 +58,25 @@ class Obstacle extends AARect {
         drawRect(ctx, this.position, this.width, this.height, this.color);
     }
 
-    computeWitnessVertices(point) {
-        // the normal can be computed with any point in the obstacle
-        const normal = this.vertices[0].subtract(point).orth();
-        const dists = this.vertices.map(v => v.subtract(point).dot(normal));
+    computeWitnessVertices(point, tol=1e-8) {
+        let right = null;
+        let left = null;
 
-        let minIdx = 0;
-        let maxIdx = 0;
-        for (let i = 1; i < this.vertices.length; i++) {
-            if (dists[i] < dists[minIdx]) {
-                minIdx = i;
+        for (let i = 0; i < this.vertices.length; i++) {
+            const vert = this.vertices[i];
+            const delta = vert.subtract(point);
+            const normal = delta.orth();
+            const dists = this.vertices.map(v => v.subtract(point).dot(normal));
+
+            if (dists.reduce((acc, dist) => acc && (dist >= -tol), true)) {
+                right = vert;
+            } else if (dists.reduce((acc, dist) => acc && (dist <= tol), true)) {
+                left = vert;
             }
-            if (dists[i] > dists[maxIdx]) {
-                maxIdx = i;
+            if (left && right) {
+                break;
             }
         }
-
-        const left = this.vertices[maxIdx];
-        const right = this.vertices[minIdx];
         return [right, left];
     }
 
@@ -84,13 +85,15 @@ class Obstacle extends AARect {
         const right = witnesses[0];
         const left = witnesses[1];
 
-        const deltaRight = right.subtract(point);
-        const extraRight = lineRectEdgeIntersection(right, deltaRight, screenRect);
+        const deltaRight = right.subtract(point).unit();
         const normalRight = deltaRight.orth();
+        const distsRight = screenRect.vertices.map(v => v.subtract(point).dot(deltaRight));
+        const extraRight = point.add(deltaRight.scale(Math.max(...distsRight)));
 
-        const deltaLeft = left.subtract(point);
-        const extraLeft = lineRectEdgeIntersection(left, deltaLeft, screenRect);
+        const deltaLeft = left.subtract(point).unit();
         const normalLeft = deltaLeft.orth();
+        const distsLeft = screenRect.vertices.map(v => v.subtract(point).dot(deltaLeft));
+        const extraLeft = point.add(deltaLeft.scale(Math.max(...distsLeft)));
 
         let screenDists = [];
         let screenVs = [];
