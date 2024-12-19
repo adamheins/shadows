@@ -7,6 +7,7 @@ from ..gui import Color
 from ..obstacle import Obstacle
 from ..collision import point_in_rect, point_poly_query, AARect
 from ..math import *
+from .policy import TagAIPolicy
 
 
 FRAMERATE = 60
@@ -48,61 +49,21 @@ RENDER_OBSERVATION = False
 RENDER_SCALE = 1
 
 
-class SimpleNotItPolicy:
-    def __init__(self, agent, player, obstacles, shape):
-        self.shape = shape
-        self.agent = agent
-        self.player = player
-        self.obstacles = obstacles
-
-    def compute(self):
-        """Policy for agents that are not "it"."""
-        r = self.player.position - self.agent.position
-        d = self.agent.direction()
-
-        if d @ r < 0:
-            # we are already facing away from the player, so take whichever
-            # direction orthogonal to center point moves us farther away from
-            # the player
-            p = self.agent.position - 0.5 * np.array(self.shape)
-            v = orth(p)
-            if v @ r > 0:
-                v = -v
-            a = angle2pi(v, start=self.agent.angle)
-            if a < np.pi:
-                angvel = 1
-            elif a > np.pi:
-                angvel = -1
-        else:
-            # steer away from the player
-            a = angle2pi(r, start=self.agent.angle)
-            if a < np.pi:
-                angvel = -1
-            elif a > np.pi:
-                angvel = 1
-
-        return Action(
-            lindir=[1, 0],
-            angdir=angvel,
-            target=None,
-            reload=False,
-            frame=Action.LOCAL,
-        )
-
-
-class SimpleEnv(gym.Env):
+# TODO basically just need to support a model in here for the enemy AI policy
+class TagNotItEnv(gym.Env):
     """Environment where the agent is 'it'."""
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": FRAMERATE}
 
-    def __init__(self, render_mode="rgb_array", grayscale=True, sparse_reward=False):
+    def __init__(
+        self, render_mode="rgb_array", grayscale=True, it_model=None, not_it_model=None
+    ):
         pygame.init()
 
         self.shape = SHAPE
         self.render_shape = tuple(int(RENDER_SCALE * s) for s in self.shape)
         self.render_mode = render_mode
         self.grayscale = grayscale
-        self.sparse_reward = sparse_reward
         self._diag = np.linalg.norm(self.shape)
 
         self.screen = pygame.Surface(self.shape)
@@ -117,8 +78,9 @@ class SimpleEnv(gym.Env):
                 0, 0, self.render_shape[0], self.render_shape[1]
             )
 
-        self.player = Agent.player(position=[10, 10], radius=3, it=True)
-        self.enemy = Agent.enemy(position=[47, 47], radius=3)
+        # now the enemy is it
+        self.player = Agent.player(position=[10, 10], radius=3)
+        self.enemy = Agent.enemy(position=[47, 47], radius=3, it=True)
 
         # just for learning purposes
         self.player.color = Color.ENEMY
@@ -134,11 +96,14 @@ class SimpleEnv(gym.Env):
             Obstacle(37, 8, 5, 5),
         ]
 
-        self.enemy_policy = SimpleNotItPolicy(
+        self.enemy_policy = TagAIPolicy(
+            screen=self.screen,
             agent=self.enemy,
             player=self.player,
             obstacles=self.obstacles,
             shape=self.shape,
+            it_model=it_model,
+            not_it_model=None,
         )
 
         if USE_TARGET_AS_ACTION:
@@ -345,11 +310,6 @@ class SimpleEnv(gym.Env):
         info = self._get_info()
         return obs, info
 
-    def _potential(self):
-        """Potential for current state."""
-        d = np.linalg.norm(self.player.position - self.enemy.position)
-        return 1 - d / self._diag
-
     def step(self, action):
         self._steps += 1
 
@@ -385,38 +345,26 @@ class SimpleEnv(gym.Env):
 
             agent.velocity = v
 
-        p0 = self._potential()
         for agent in agents:
             agent.step(TIMESTEP)
-        p1 = self._potential()
 
-        # round terminates when the enemy is tagged
+        # round terminates when the player is caught
         r = self.player.radius + self.enemy.radius
         d = np.linalg.norm(self.player.position - self.enemy.position)
         terminated = bool(d < r)
 
         truncated = self._steps >= MAX_STEPS_PER_EPISODE
 
-        reward = 1 if terminated else 0
+        # negative reward if caught
+        reward = -1 if terminated else 0
 
-        # use potential to shape reward
-        if not self.sparse_reward:
-            F = p1 - p0
-            reward += F
-            # reward = 1 if terminated else -0.01 * d
+        # TODO add some reward if a treasure is taken
 
-        # if USE_TARGET_AS_ACTION:
-        #     reward = -np.linalg.norm(self.enemy.position - action)
-
-        if VERBOSE and terminated:
-            print("tagged!")
-            print(f"  steps = {self._steps}")
-            print(f"  d = {d}")
-            print(f"  r = {reward}")
-
-        # if VERBOSE and (terminated or truncated):
-        #     print(f"  a = {action}")
-        #     print(f"  t = {self.enemy.position}")
+        # if VERBOSE and terminated:
+        #     print("tagged!")
+        #     print(f"  steps = {self._steps}")
+        #     print(f"  d = {d}")
+        #     print(f"  r = {reward}")
 
         self._draw(self.screen, self.screen_rect)
         obs = self._get_obs()
@@ -464,4 +412,4 @@ class SimpleEnv(gym.Env):
             return self._get_rgb(self.render_screen)
 
 
-gym.register(id="Simple-v0", entry_point=SimpleEnv)
+gym.register(id="TagNotIt-v0", entry_point=TagNotItEnv)

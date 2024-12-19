@@ -63,7 +63,7 @@ def make_model(algo_name, env, seed, trained_agent=None):
     algo_name = algo_name.lower()
     if algo_name == "dqn" or algo_name == "qrdqn":
         if algo_name == "dqn":
-            algo = DQN
+            algo = shadows.DQN
         else:
             algo = QRDQN
         kwargs.update(
@@ -77,6 +77,7 @@ def make_model(algo_name, env, seed, trained_agent=None):
                 gradient_steps=1,
                 exploration_fraction=0.5,
                 exploration_final_eps=0.01,
+                double_q=True,
             )
         )
     elif algo_name == "ppo":

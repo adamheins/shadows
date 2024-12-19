@@ -41,7 +41,8 @@ class TagGame:
         self,
         shape=(50, 50),
         display=True,
-        model=None,
+        it_model=None,
+        not_it_model=None,
         rng=None,
     ):
         self.rng = np.random.default_rng(rng)
@@ -90,28 +91,15 @@ class TagGame:
 
         self.tag_cooldown = 0
 
-        # self.enemy_policy = TagAIPolicy(
-        #     agent=self.enemy,
-        #     player=self.player,
-        #     obstacles=self.obstacles,
-        #     shape=self.shape,
-        # )
-        if model is None:
-            self.enemy_policy = TagAIPolicy(
-                agent=self.enemy,
-                player=self.player,
-                obstacles=self.obstacles,
-                shape=self.shape,
-            )
-        else:
-            self.enemy_policy = LearnedTagAIPolicy(
-                screen=self.screen,
-                agent=self.enemy,
-                player=self.player,
-                obstacles=self.obstacles,
-                shape=self.shape,
-                model=model,
-            )
+        self.enemy_policy = TagAIPolicy(
+            screen=self.screen,
+            agent=self.enemy,
+            player=self.player,
+            obstacles=self.obstacles,
+            shape=self.shape,
+            it_model=it_model,
+            not_it_model=not_it_model,
+        )
 
     def _draw(
         self,
