@@ -1,15 +1,4 @@
 
-// Action for the agent to take
-class Action {
-    constructor(lindir, angdir = 0, localFrame = true, lookback = false) {
-        this.lindir = lindir;
-        this.angdir = angdir;
-        this.localFrame = localFrame;
-        this.lookback = lookback;
-    }
-}
-
-
 class TagAIPolicy {
     constructor(agent, player, obstacles, width, height) {
         this.agent = agent;
@@ -31,8 +20,6 @@ class TagAIPolicy {
             angvel = 1;
         } else if (a > Math.PI) {
             angvel = -1;
-        } else {
-            angvel = 0;
         }
         return new Action(new Vec2(1, 0), angvel);
     }
@@ -51,6 +38,7 @@ class TagAIPolicy {
             if (v.dot(r) > 0) {
                 v = v.scale(-1);
             }
+
             const a = angle2pi(v, this.agent.angle)
             if (a < Math.PI) {
                 angvel = 1;

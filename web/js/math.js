@@ -50,7 +50,19 @@ function angle2pi(v, start=0) {
     // negative for y is because we are in a left-handed frame
     let a = Math.atan2(-v.y, v.x) - start;
     if (a < 0) {
-        a = 2 * Math.PI + a;
+        a += 2 * Math.PI;
     }
     return a;
+}
+
+
+function wrapToPi(x) {
+    // Wrap a value to [-pi, pi]
+    while (x > Math.PI) {
+        x -= 2 * Math.PI;
+    }
+    while (x < -Math.PI) {
+        x += 2 * Math.PI;
+    }
+    return x;
 }

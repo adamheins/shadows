@@ -113,14 +113,10 @@ class Agent(Entity):
                 forward_vel = PLAYER_FORWARD_VEL
 
         self.angvel = PLAYER_ANGVEL * unit(action.angdir)
+
+        vel = forward_vel * unit(action.lindir)
         if action.frame == Action.LOCAL:
-            if action.lindir[0] >= 0:
-                linvel = forward_vel * unit(action.lindir)
-            else:
-                linvel = PLAYER_BACKWARD_VEL * unit(action.lindir)
-            vel = self.rotmat() @ linvel
-        else:
-            vel = forward_vel * unit(action.lindir)
+            vel = self.rotmat() @ vel
         self.velocity = vel
 
         return projectile

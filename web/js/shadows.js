@@ -1,50 +1,6 @@
 const TIMESTEP = 1 / 60;
 const TAG_COOLDOWN = 120;
 
-class Agent {
-    constructor(position, color, it=false) {
-        this.position = position;
-        this.angle = 0;
-        this.color = color;
-        this.radius = 3;
-
-        this.velocity = new Vec2(0, 0);
-        this.angvel = 0;
-
-        this.it = it;
-    }
-
-    direction() {
-        const c = Math.cos(this.angle);
-        const s = Math.sin(this.angle);
-        return new Vec2(c, -s);
-    }
-
-    draw(ctx, drawOutline=true) {
-        drawCircle(ctx, this.position, this.radius, this.color);
-        // const end = this.position.add(this.dir.rotate(this.angle));
-        const end = this.position.add(this.direction().scale(this.radius));
-        drawLine(ctx, this.position, end, "black");
-
-        if (drawOutline && this.it) {
-            drawCircle(ctx, this.position, this.radius, "yellow", false);
-        }
-    }
-
-    command(action) {
-        this.velocity = action.lindir.scale(75).rotate(this.angle);
-        this.angvel = 5 * action.angdir;
-    }
-
-    step(dt) {
-        const dp = this.velocity.scale(dt);
-        this.position = this.position.add(dp);
-        this.angle += dt * this.angvel;
-
-        this.velocity = new Vec2(0, 0);
-        this.angvel = 0;
-    }
-}
 
 class Obstacle extends AARect {
     constructor(position, width, height) {
