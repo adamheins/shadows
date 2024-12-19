@@ -222,6 +222,13 @@ function main() {
 
     const game = new TagGame(50, 50);
 
+    let model = null;
+    ort.InferenceSession.create('http://localhost:8000/dqn.onnx').then(session => {
+        model = session;
+    }).catch(e => {
+        console.log(e);
+    });
+
     setInterval(() => {
         game.step();
         game.draw(ctx);

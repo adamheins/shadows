@@ -11,9 +11,15 @@ cd shadows
 poetry install
 ```
 
+## Use the model in the browser
+1. `cd scripts/learn`
+2. Export the model to onnx using `onnx_export.py`.
+3. Start a local web server `http-server -p 8000 --cors` to serve the model.
+
 ## Todo
 * Port to JS
 * Fix action IDs: they may not map properly to agent indices
+* Make learning stuff optional
 
 ## Other ideas
 * shooting makes you visible

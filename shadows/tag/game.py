@@ -19,17 +19,33 @@ USE_CCD = False
 USE_AI_POLICY = True
 ALLOW_TAG_SWITCH = True
 
-RENDER_SCALE = 4
+TREASURE_RADIUS = 1
+OCCLUDE_TREASURES = True
+
+RENDER_SCALE = 8
+
+
+class Treasure(Circle):
+    def __init__(self, center, radius):
+        super().__init__(center, radius)
+        self.color = (0, 255, 0)
+
+    def draw(self, surface, scale=1):
+        pygame.draw.circle(
+            surface, self.color, scale * self.center, scale * self.radius
+        )
 
 
 class TagGame:
     def __init__(
         self,
         shape=(50, 50),
-        invert_agent_colors=False,
         display=True,
         model=None,
+        rng=None,
     ):
+        self.rng = np.random.default_rng(rng)
+
         self.shape = shape
         self.render_shape = tuple(int(RENDER_SCALE * s) for s in self.shape)
 
@@ -45,18 +61,10 @@ class TagGame:
             # )
             # self.render_screen = pygame.Surface(self.render_shape)
 
+        self.font = pygame.font.SysFont(None, 3 * RENDER_SCALE)
         self.clock = pygame.time.Clock()
         self.keys_down = set()
 
-        # self.obstacles = [
-        #     Obstacle(80, 80, 80, 80),
-        #     Obstacle(0, 230, 160, 40),
-        #     Obstacle(80, 340, 80, 80),
-        #     Obstacle(250, 80, 40, 220),
-        #     Obstacle(290, 80, 100, 40),
-        #     Obstacle(390, 260, 110, 40),
-        #     Obstacle(250, 380, 200, 40),
-        # ]
         # self.obstacles = []
         self.obstacles = [
             Obstacle(20, 20, 10, 10),
@@ -73,18 +81,12 @@ class TagGame:
         self.agents = [self.player, self.enemy]
         self.it_id = 1
 
-        # just for learning purposes
-        if invert_agent_colors:
-            self.player.color = Color.ENEMY
-            self.enemies[0].color = Color.PLAYER
-
-        # id of the agent that is "it"
-        # if player_it:
-        #     self.player.it = True
-        #     self.it_id = 0
-        # else:
-        #     self.enemy.it = True
-        #     self.it_id = 1
+        self.scores = np.zeros(len(self.agents))
+        self.treasures = []
+        for _ in range(2):
+            p = self._generate_treasure_position(TREASURE_RADIUS)
+            treasure = Treasure(center=p, radius=TREASURE_RADIUS)
+            self.treasures.append(treasure)
 
         self.tag_cooldown = 0
 
@@ -119,6 +121,7 @@ class TagGame:
         draw_direction=True,
         draw_outline=True,
         draw_occlusion=True,
+        draw_treasure=True,
     ):
         screen.fill(Color.BACKGROUND)
 
@@ -138,6 +141,9 @@ class TagGame:
         #     draw_outline=draw_outline,
         #     scale=scale,
         # )
+        if draw_treasure and OCCLUDE_TREASURES:
+            for treasure in self.treasures:
+                treasure.draw(surface=screen, scale=scale)
 
         # NOTE screen_rect is always the unscaled version
         for obstacle in self.obstacles:
@@ -150,6 +156,16 @@ class TagGame:
                     scale=scale,
                 )
 
+        if draw_treasure and not OCCLUDE_TREASURES:
+            for treasure in self.treasures:
+                treasure.draw(surface=screen, scale=scale)
+
+        if draw_treasure:
+            text = f"Score: {int(self.scores[0])}"
+            image = self.font.render(text, True, (0, 255, 0))
+            screen.blit(image, scale * np.array([2, 45]))
+
+
     def draw_enemy_screen(self):
         self._draw(
             screen=self.screen,
@@ -158,6 +174,7 @@ class TagGame:
             draw_direction=False,
             draw_outline=False,
             draw_occlusion=True,
+            draw_treasure=False,
         )
 
     def draw_player_screen(self):
@@ -172,6 +189,21 @@ class TagGame:
     def render_display(self):
         self.draw_player_screen()
         pygame.display.flip()
+
+    def _generate_treasure_position(self, radius):
+        # generate collision-free position for a treasure
+        r = radius * np.ones(2)
+        while True:
+            p = self.rng.uniform(low=r, high=np.array(self.shape) - r)
+            collision = False
+            for obstacle in self.obstacles:
+                Q = point_poly_query(p, obstacle)
+                if Q.distance < radius:
+                    collision = True
+                    break
+            if not collision:
+                break
+        return p
 
     def step(self, actions):
         """Step the game forward in time."""
@@ -224,6 +256,17 @@ class TagGame:
                     v = min_time * v + (1 - min_time) * vtan
 
             agent.velocity = v
+
+        # check if someone has collected a treasure
+        for i, agent in enumerate(self.agents):
+            if agent.it:
+                continue
+
+            for treasure in self.treasures:
+                d = np.linalg.norm(agent.position - treasure.center)
+                if d <= agent.radius + treasure.radius:
+                    self.scores[i] += 1
+                    treasure.center = self._generate_treasure_position(TREASURE_RADIUS)
 
         # check if someone has been tagged
         if self.tag_cooldown == 0:
