@@ -44,3 +44,13 @@ class Vec2 {
         return this;
     }
 }
+
+
+function angle2pi(v, start=0) {
+    // negative for y is because we are in a left-handed frame
+    let a = Math.atan2(-v.y, v.x) - start;
+    if (a < 0) {
+        a = 2 * Math.PI + a;
+    }
+    return a;
+}

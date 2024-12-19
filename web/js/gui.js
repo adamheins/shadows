@@ -1,8 +1,13 @@
-function drawCircle(ctx, position, radius, color) {
-    ctx.fillStyle = color;
+function drawCircle(ctx, position, radius, color, fill=true) {
     ctx.beginPath();
     ctx.arc(position.x, position.y, radius, 0, 2 * Math.PI);
-    ctx.fill();
+    if (fill) {
+        ctx.fillStyle = color;
+        ctx.fill();
+    } else {
+        ctx.strokeStyle = color;
+        ctx.stroke();
+    }
 }
 
 function drawPolygon(ctx, vertices, color) {

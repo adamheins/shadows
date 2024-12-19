@@ -75,7 +75,11 @@ class Agent(Entity):
         return rotmat(self.angle)
 
     def direction(self):
-        return self.rotmat()[:, 0]
+        """Unit vector in the direction the agent is facing."""
+        # first column of the rotation matrix
+        c = np.cos(self.angle)
+        s = np.sin(self.angle)
+        return np.array([c, -s])
 
     def draw(self, surface, scale=1, draw_direction=True, draw_outline=True):
         p = scale * self.position
@@ -86,7 +90,7 @@ class Agent(Entity):
         pygame.draw.circle(surface, self.color, p, r)
 
         if draw_direction:
-            endpoint = p + r * rotmat(self.angle)[:, 0]
+            endpoint = p + r * self.direction()
             pygame.draw.line(surface, Color.DIRECTION, p, endpoint, 1)
 
     def command(self, action):
@@ -114,7 +118,7 @@ class Agent(Entity):
                 linvel = forward_vel * unit(action.lindir)
             else:
                 linvel = PLAYER_BACKWARD_VEL * unit(action.lindir)
-            vel = rotmat(self.angle) @ linvel
+            vel = self.rotmat() @ linvel
         else:
             vel = forward_vel * unit(action.lindir)
         self.velocity = vel

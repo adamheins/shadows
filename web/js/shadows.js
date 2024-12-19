@@ -1,29 +1,34 @@
-// Action for the agent to take
-class Action {
-    constructor(lindir, angdir = 0, localFrame = true, lookback = false) {
-        this.lindir = lindir;
-        this.angdir = angdir;
-        this.localFrame = localFrame;
-        this.lookback = lookback;
-    }
-}
+const TIMESTEP = 1 / 60;
+const TAG_COOLDOWN = 120;
 
 class Agent {
-    constructor(position, color) {
+    constructor(position, color, it=false) {
         this.position = position;
         this.angle = 0;
         this.color = color;
         this.radius = 3;
-        this.dir = new Vec2(this.radius, 0);
 
         this.velocity = new Vec2(0, 0);
         this.angvel = 0;
+
+        this.it = it;
     }
 
-    draw(ctx) {
+    direction() {
+        const c = Math.cos(this.angle);
+        const s = Math.sin(this.angle);
+        return new Vec2(c, -s);
+    }
+
+    draw(ctx, drawOutline=true) {
         drawCircle(ctx, this.position, this.radius, this.color);
-        const end = this.position.add(this.dir.rotate(this.angle));
+        // const end = this.position.add(this.dir.rotate(this.angle));
+        const end = this.position.add(this.direction().scale(this.radius));
         drawLine(ctx, this.position, end, "black");
+
+        if (drawOutline && this.it) {
+            drawCircle(ctx, this.position, this.radius, "yellow", false);
+        }
     }
 
     command(action) {
@@ -39,8 +44,6 @@ class Agent {
         this.velocity = new Vec2(0, 0);
         this.angvel = 0;
     }
-
-
 }
 
 class Obstacle extends AARect {
@@ -138,11 +141,16 @@ class TagGame {
             this.keyMap.delete(event.key);
         });
 
-        this.player = new Agent(new Vec2(10, 10), "red");
-        this.enemy = new Agent(new Vec2(40, 40), "blue");
+        this.player = new Agent(new Vec2(10, 10), "red", false);
+        this.enemy = new Agent(new Vec2(40, 40), "blue", true);
         this.agents = [this.player, this.enemy];
+        this.itId = 1;
 
         this.obstacles = [new Obstacle(new Vec2(20, 20), 10, 10)];
+
+        this.enemyPolicy = new TagAIPolicy(this.enemy, this.player, this.obstacles, this.width, this.height);
+
+        this.tagCooldown = 0;
     }
 
     draw(ctx) {
@@ -157,6 +165,8 @@ class TagGame {
     }
 
     step() {
+        this.tagCooldown = Math.max(0, this.tagCooldown - 1);
+
         // parse the keys and update the agent poses
         let lindir = 0;
         let angdir = 0;
@@ -175,10 +185,12 @@ class TagGame {
         }
 
         const lookback = this.keyMap.has("Space");
-        const action = new Action(new Vec2(lindir, 0), angdir, true, lookback);
+        const playerAction = new Action(new Vec2(lindir, 0), angdir, true, lookback);
+        const enemyAction = this.enemyPolicy.compute();
 
         // do stuff with the agents
-        this.player.command(action);
+        this.player.command(playerAction);
+        this.enemy.command(enemyAction);
 
         this.agents.forEach(agent => {
             let v = agent.velocity;
@@ -210,8 +222,29 @@ class TagGame {
             agent.velocity = v;
         });
 
-        this.player.step(1 / 60);
+        // check if someone has been tagged
+        if (this.tagCooldown === 0) {
+            const d = this.player.position.subtract(this.enemy.position).length();
+            if (d < this.player.radius + this.enemy.radius) {
+                this.player.it = !this.player.it;
+                this.enemy.it = !this.player.it;
+                this.itId = (this.itId + 1) % 2;
+                this.tagCooldown = TAG_COOLDOWN;
+            }
+        }
+
+        // cannot move after just being tagged
+        if (this.tagCooldown > 0) {
+            this.agents[this.itId].velocity = new Vec2(0, 0);
+        }
+
+        this.agents.forEach(agent => agent.step(TIMESTEP));
     }
+}
+
+async function loadModel() {
+    const session = await ort.InferenceSession.create('http://localhost:8000/dqn.onnx');
+    return session;
 }
 
 
@@ -220,19 +253,20 @@ function main() {
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
 
+    // const model = loadModel();
     const game = new TagGame(50, 50);
 
-    let model = null;
-    ort.InferenceSession.create('http://localhost:8000/dqn.onnx').then(session => {
-        model = session;
-    }).catch(e => {
-        console.log(e);
-    });
+    // let model = null;
+    // ort.InferenceSession.create('http://localhost:8000/dqn.onnx').then(session => {
+    //     model = session;
+    // }).catch(e => {
+    //     console.log(e);
+    // });
 
     setInterval(() => {
         game.step();
         game.draw(ctx);
-    }, 1000 / 60, ctx);
+    }, 1000 * TIMESTEP, ctx);
 }
 
 

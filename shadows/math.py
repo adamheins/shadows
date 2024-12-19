@@ -18,8 +18,8 @@ def orth(v):
 
 def rotmat(angle):
     """2D rotation matrix."""
-    s = np.sin(angle)
     c = np.cos(angle)
+    s = np.sin(angle)
     return np.array([[c, s], [-s, c]])
 
 
