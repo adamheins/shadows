@@ -63,6 +63,8 @@ class Agent(Entity):
         self.it = it
         self.lookback = False
 
+        self.last_vel_mag = 0
+
     @classmethod
     def player(cls, position, it=False, **kwargs):
         return cls(position, color=Color.PLAYER, it=it, **kwargs)
@@ -131,6 +133,8 @@ class Agent(Entity):
 
         self.angle = wrap_to_pi(self.angle + dt * self.angvel)
         self.position = self.position + dt * self.velocity
+
+        self.last_vel_mag = np.linalg.norm(self.velocity)
 
         self.velocity = np.zeros(2)
         self.angvel = 0

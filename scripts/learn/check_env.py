@@ -15,10 +15,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("env", help="Environment name.")
     parser.add_argument("--seed", type=int, default=0, help="Random seed.")
+    parser.add_argument("--it-model", help="Path to the trained model for 'it' agent.")
     args = parser.parse_args()
 
     # make the env and check that it is okay
-    env = gym.make(args.env, render_mode="human")
+    env_kwargs = dict(it_model=args.it_model, not_it_model=None)
+    env = gym.make(args.env, render_mode="human", **env_kwargs)
     obs, info = env.reset(seed=args.seed)
     check_env(env)
 

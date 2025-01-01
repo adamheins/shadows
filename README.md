@@ -62,16 +62,23 @@ poetry install
   - this does not work at all
 * is the max episode length a problem?
   - making it 1000 does not really improve anything
+* QR-DQN doesn't work well
+* changing network architecture doesn't change much
+* appending last four frames together doesn't change much
+
+* hyperparameter sweep?
+* can also try SAC with continuous velocity actions
+* try again with skip frames
+* encouraging larger velocity seems like a reasonable idea (to avoid agents
+  getting stuck in corners or against walls)
+  - doing with with the agent that just moves exactly toward the agent overfits
+
 
 * idea: train a model to predict where the other agent is despite occlusions
-* need to somehow get diffusion going too
-* try changing network architecture, doing hyperparameter sweep
-
 * can I somehow shift the burden off the RL agent? can I just learn a
   residual?
   - if I can see enemy pixels, just steer toward enemy, else use RL
     policy
-* try QR-DQN from contrib repo
     
 
 ## Possible other games

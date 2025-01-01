@@ -2,7 +2,7 @@ import pygame
 import numpy as np
 import gymnasium as gym
 
-from ..entity import Agent, Action
+from ..entity import Agent, Action, PLAYER_FORWARD_VEL
 from ..gui import Color
 from ..obstacle import Obstacle
 from ..collision import point_in_rect, point_poly_query, AARect
@@ -37,7 +37,12 @@ DRAW_DIRECTION = False
 
 # draw occlusions behind obstacles
 DRAW_OCCLUSIONS = True
-USE_AI_POLICY = False
+
+# use a policy for the computer-controlled agent
+# this may be learned or handcrafted
+USE_AI_POLICY = True
+
+# print extra information
 VERBOSE = True
 
 # render the grayscale observation directly, rather than a
@@ -47,6 +52,8 @@ RENDER_OBSERVATION = False
 
 # scale up rendering by this value
 RENDER_SCALE = 1
+
+FRAME_SKIP = 1
 
 
 # TODO basically just need to support a model in here for the enemy AI policy
@@ -310,61 +317,81 @@ class TagNotItEnv(gym.Env):
         info = self._get_info()
         return obs, info
 
-    def step(self, action):
-        self._steps += 1
-
-        self.player.command(self._translate_action(action))
-        if USE_AI_POLICY:
-            self.enemy.command(self.enemy_policy.compute())
-
-        agents = [self.player, self.enemy]
-        for agent in agents:
-            v = agent.velocity
-            if np.linalg.norm(v) > 0:
-                # don't leave the screen
-                if agent.position[0] >= self.shape[0] - agent.radius:
-                    v[0] = min(0, v[0])
-                elif agent.position[0] <= agent.radius:
-                    v[0] = max(0, v[0])
-                if agent.position[1] >= self.shape[1] - agent.radius:
-                    v[1] = min(0, v[1])
-                elif agent.position[1] <= agent.radius:
-                    v[1] = max(0, v[1])
-
-                # don't penetrate obstacles
-                normal = None
-                for obstacle in self.obstacles:
-                    Q = point_poly_query(agent.position, obstacle)
-                    if Q.distance < agent.radius:
-                        normal = Q.normal
-                        break
-
-                if normal is not None and normal @ v < 0:
-                    tan = orth(normal)  # tangent velocity
-                    v = (tan @ v) * tan
-
-            agent.velocity = v
-
-        for agent in agents:
-            agent.step(TIMESTEP)
-
-        # round terminates when the player is caught
-        r = self.player.radius + self.enemy.radius
+    def _potential(self):
+        """Potential for current state."""
         d = np.linalg.norm(self.player.position - self.enemy.position)
-        terminated = bool(d < r)
 
-        truncated = self._steps >= MAX_STEPS_PER_EPISODE
+        # negative of the It environment
+        return -(1 - d / self._diag)
+
+    def step(self, action):
+        p0 = self._potential()
+        for _ in range(FRAME_SKIP):
+            self._steps += 1
+
+            self.player.command(self._translate_action(action))
+            if USE_AI_POLICY:
+                self.enemy.command(self.enemy_policy.compute())
+
+            agents = [self.player, self.enemy]
+            for agent in agents:
+                v = agent.velocity
+                if np.linalg.norm(v) > 0:
+                    # don't leave the screen
+                    if agent.position[0] >= self.shape[0] - agent.radius:
+                        v[0] = min(0, v[0])
+                    elif agent.position[0] <= agent.radius:
+                        v[0] = max(0, v[0])
+                    if agent.position[1] >= self.shape[1] - agent.radius:
+                        v[1] = min(0, v[1])
+                    elif agent.position[1] <= agent.radius:
+                        v[1] = max(0, v[1])
+
+                    # don't penetrate obstacles
+                    normal = None
+                    for obstacle in self.obstacles:
+                        Q = point_poly_query(agent.position, obstacle)
+                        if Q.distance < agent.radius:
+                            normal = Q.normal
+                            break
+
+                    if normal is not None and normal @ v < 0:
+                        tan = orth(normal)  # tangent velocity
+                        v = (tan @ v) * tan
+
+                agent.velocity = v
+
+            for agent in agents:
+                agent.step(TIMESTEP)
+
+            # round terminates when the player is caught
+            r = self.player.radius + self.enemy.radius
+            d = np.linalg.norm(self.player.position - self.enemy.position)
+            terminated = bool(d < r)
+
+            truncated = self._steps >= MAX_STEPS_PER_EPISODE
+
+            # stop frame skip if episode ends
+            if terminated or truncated:
+                break
+        p1 = self._potential()
 
         # negative reward if caught
         reward = -1 if terminated else 0
 
+        # shaped reward
+        F = p1 - p0
+        reward += F
+
+        # positive reward if not caught
+        # reward = 1 if not terminated else 0
+        # reward = self.player.last_vel_mag / PLAYER_FORWARD_VEL if not terminated else 0
+
         # TODO add some reward if a treasure is taken
 
-        # if VERBOSE and terminated:
-        #     print("tagged!")
-        #     print(f"  steps = {self._steps}")
-        #     print(f"  d = {d}")
-        #     print(f"  r = {reward}")
+        if VERBOSE and terminated:
+            print("tagged!")
+            print(f"  steps = {self._steps}")
 
         self._draw(self.screen, self.screen_rect)
         obs = self._get_obs()

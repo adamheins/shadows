@@ -1,12 +1,72 @@
 import pygame
 import numpy as np
+from collections import deque
 
 from ..math import *
 from ..entity import Action
 from ..gui import Color
 
 
-USE_TARGET_AS_ACTION = False
+N_STACK = 4
+
+
+class Observer:
+    def __init__(self, screen, agent, n_stack=N_STACK):
+        self.screen = screen
+        self.agent = agent
+
+        self.n_stack = n_stack
+        self._past_obs = deque(maxlen=n_stack)
+
+    def _get_rgb(self):
+        """Get RGB pixel values from the given screen."""
+        return np.array(pygame.surfarray.pixels3d(self.screen), dtype=np.uint8)
+
+    def _get_single_observation(self):
+        """Get a single observation."""
+        rgb = self._get_rgb()
+        shape = rgb.shape[:2] + (1,)
+
+        # TODO need to confirm the colors are right
+        gray = np.zeros(shape, dtype=np.uint8)
+
+        enemy_mask = np.all(rgb == Color.ENEMY, axis=-1)
+        gray[enemy_mask, 0] = 85
+
+        player_mask = np.all(rgb == Color.PLAYER, axis=-1)
+        gray[player_mask, 0] = 170
+
+        obs_mask = np.all(rgb == Color.OBSTACLE, axis=-1)
+        gray[obs_mask, 0] = 255
+
+        return {
+            "position": self.agent.position.astype(np.float32),
+            "angle": np.array([self.agent.angle], dtype=np.float32),
+            "image": gray,
+        }
+
+    def get_observation(self):
+        """Get an observation for input to the model, which may be stacked."""
+        obs = self._get_single_observation()
+        if self.n_stack == 1:
+            return obs
+
+        # add the new observation
+        self._past_obs.append(obs)
+
+        # fill up the queue at first
+        while len(self._past_obs) < self._past_obs.maxlen:
+            self._past_obs.append(obs)
+
+        # concatenate the queue to produce the stacked observation
+        position = np.concatenate([obs["position"] for obs in self._past_obs])
+        angle = np.concatenate([obs["angle"] for obs in self._past_obs])
+        image = np.concatenate([obs["image"] for obs in self._past_obs], axis=-1)
+        return {
+            "position": position,
+            "angle": angle,
+            "image": image,
+        }
 
 
 class TagAIPolicy:
@@ -24,31 +84,7 @@ class TagAIPolicy:
         self.it_model = it_model
         self.not_it_model = not_it_model
 
-    def _get_rgb(self, screen):
-        """Get RGB pixel values from the given screen."""
-        return np.array(pygame.surfarray.pixels3d(screen), dtype=np.uint8)
-
-    def _get_obs(self):
-        """Construct the current observation."""
-        rgb = self._get_rgb(self.screen)
-
-        # TODO need to confirm the colors are right
-        gray = np.zeros(self.shape + (1,), dtype=np.uint8)
-
-        enemy_mask = np.all(rgb == Color.ENEMY, axis=-1)
-        gray[enemy_mask, 0] = 85
-
-        player_mask = np.all(rgb == Color.PLAYER, axis=-1)
-        gray[player_mask, 0] = 170
-
-        obs_mask = np.all(rgb == Color.OBSTACLE, axis=-1)
-        gray[obs_mask, 0] = 255
-
-        return {
-            "position": self.agent.position.astype(np.float32),
-            "angle": np.array([self.agent.angle], dtype=np.float32),
-            "image": gray,
-        }
+        self.observer = Observer(self.screen, self.agent)
 
     def _translate_action(self, action):
         if action == 0:
@@ -89,7 +125,7 @@ class TagAIPolicy:
         )
 
     def _learned_it_policy(self):
-        obs = self._get_obs()
+        obs = self.observer.get_observation()
         action, _ = self.it_model.predict(obs, deterministic=False)
         return self._translate_action(action)
 
@@ -133,7 +169,7 @@ class TagAIPolicy:
         )
 
     def _learned_not_it_policy(self):
-        obs = self._get_obs()
+        obs = self.observer.get_observation()
         action, _ = self.not_it_model.predict(obs, deterministic=False)
         return self._translate_action(action)
 

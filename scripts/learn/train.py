@@ -13,7 +13,7 @@ from stable_baselines3 import DQN, PPO, SAC, TD3
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import EvalCallback
-from stable_baselines3.common.vec_env import VecTransposeImage
+from stable_baselines3.common.vec_env import VecTransposeImage, VecFrameStack
 from stable_baselines3.common.noise import NormalActionNoise
 
 from sb3_contrib import QRDQN
@@ -21,12 +21,14 @@ from sb3_contrib import QRDQN
 import shadows
 
 
-TOTAL_TIMESTEPS = 2_000_000
+TOTAL_TIMESTEPS = 5_000_000
 
 EVAL = True
 EVAL_FREQ = 50_000
 N_EVAL_ENVS = 1
 N_EVAL_EPISODES = 5
+
+N_FRAME_STACK = 4
 
 
 def linear_schedule(initial_value):
@@ -133,16 +135,31 @@ def main():
         "-T", "--trained-agent", help="Existing model to continue training."
     )
     parser.add_argument("--algo", default="dqn", help="The algorithm to use.")
+    parser.add_argument("--it-model", help="Path to the trained model for 'it' agent.")
     args = parser.parse_args()
 
     log_dir = make_log_dir(args.env, args.log_dir)
 
+    it_model, not_it_model = None, None
+    if args.it_model is not None:
+        it_model = DQN.load(args.it_model)
+
     # create environment
     # use VecTransposeImage because SB3 wants channel-first format
+    env_kwargs = dict(it_model=it_model, not_it_model=None)
     env = make_vec_env(
-        args.env, seed=args.seed, n_envs=args.n_envs, monitor_dir=log_dir
+        args.env,
+        seed=args.seed,
+        n_envs=args.n_envs,
+        monitor_dir=log_dir,
+        env_kwargs=env_kwargs,
     )
     env = VecTransposeImage(env)
+    env = VecFrameStack(env, n_stack=N_FRAME_STACK)
+
+    # import IPython
+    # IPython.embed()
+    # return
 
     # instantiate the agent
     model = make_model(
@@ -150,8 +167,11 @@ def main():
     )
 
     if EVAL:
-        eval_env = make_vec_env(args.env, seed=args.seed, n_envs=N_EVAL_ENVS)
+        eval_env = make_vec_env(
+            args.env, seed=args.seed, n_envs=N_EVAL_ENVS, env_kwargs=env_kwargs
+        )
         eval_env = VecTransposeImage(eval_env)
+        eval_env = VecFrameStack(eval_env, n_stack=N_FRAME_STACK)
         eval_callback = EvalCallback(
             eval_env,
             best_model_save_path=log_dir,
@@ -177,7 +197,14 @@ def main():
     end = datetime.datetime.now()
 
     info_path = os.path.join(log_dir, "info.yaml")
-    info = {"start": start, "end": end, "env": args.env, "algo": args.algo}
+    info = {
+        "start": start,
+        "end": end,
+        "env": args.env,
+        "algo": args.algo,
+        "seed": args.seed,
+        "timesteps": TOTAL_TIMESTEPS,
+    }
     with open(info_path, "w") as f:
         yaml.dump(info, stream=f)
 

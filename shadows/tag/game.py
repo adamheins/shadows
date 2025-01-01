@@ -6,7 +6,7 @@ from ..math import *
 from ..gui import Text, Color
 from ..entity import Agent, Action
 from ..obstacle import Obstacle
-from .policy import TagAIPolicy, LearnedTagAIPolicy
+from .policy import TagAIPolicy
 
 
 FRAMERATE = 60

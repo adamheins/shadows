@@ -48,6 +48,9 @@ RENDER_OBSERVATION = False
 # scale up rendering by this value
 RENDER_SCALE = 1
 
+# TODO frame skip?
+FRAME_SKIP = 1
+
 
 class TagItEnv(gym.Env):
     """Environment where the agent is 'it'."""
