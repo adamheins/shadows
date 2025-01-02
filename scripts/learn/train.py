@@ -21,7 +21,7 @@ from sb3_contrib import QRDQN
 import shadows
 
 
-TOTAL_TIMESTEPS = 5_000_000
+TOTAL_TIMESTEPS = 2_000_000
 
 EVAL = True
 EVAL_FREQ = 50_000
@@ -86,7 +86,7 @@ def make_model(algo_name, env, seed, trained_agent=None):
         algo = PPO
         kwargs.update(
             dict(
-                n_steps=128,
+                n_steps=512,
                 n_epochs=4,
                 batch_size=256,
                 learning_rate=linear_schedule(2.5e-4),

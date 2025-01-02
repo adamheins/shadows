@@ -32,6 +32,9 @@ USE_LOCAL_FRAME_ACTIONS = True
 # use a position target as the action rather than velocity commands
 USE_TARGET_AS_ACTION = False
 
+# use continuous linear and angular velocity as the actions
+USE_CONTINUOUS_ACTIONS = True
+
 # draw the direction line onto the agents
 DRAW_DIRECTION = False
 
@@ -113,7 +116,7 @@ class TagNotItEnv(gym.Env):
             not_it_model=None,
         )
 
-        if USE_TARGET_AS_ACTION:
+        if USE_TARGET_AS_ACTION or USE_CONTINUOUS_ACTIONS:
             self.action_space = gym.spaces.Box(
                 low=-np.ones(2, dtype=np.float32),
                 high=np.ones(2, dtype=np.float32),
@@ -214,6 +217,14 @@ class TagNotItEnv(gym.Env):
             return Action(
                 lindir=[linvel, 0],
                 angdir=angvel,
+                target=None,
+                reload=False,
+                frame=Action.LOCAL,
+            )
+        elif USE_CONTINUOUS_ACTIONS:
+            return Action(
+                lindir=[action[0], 0],
+                angdir=action[1],
                 target=None,
                 reload=False,
                 frame=Action.LOCAL,

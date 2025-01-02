@@ -114,9 +114,9 @@ class Agent(Entity):
             else:
                 forward_vel = PLAYER_FORWARD_VEL
 
-        self.angvel = PLAYER_ANGVEL * unit(action.angdir)
+        self.angvel = PLAYER_ANGVEL * action.angdir
 
-        vel = forward_vel * unit(action.lindir)
+        vel = forward_vel * action.lindir
         if action.frame == Action.LOCAL:
             vel = self.rotmat() @ vel
         self.velocity = vel
@@ -235,7 +235,7 @@ class Action:
         self, lindir, angdir=0, target=None, reload=False, frame=WORLD, lookback=False
     ):
         self.frame = frame
-        self.lindir = lindir
+        self.lindir = np.array(lindir)
         self.angdir = angdir
         self.target = target
         self.reload = reload

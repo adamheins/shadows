@@ -153,7 +153,6 @@ class TagGame:
             image = self.font.render(text, True, (0, 255, 0))
             screen.blit(image, scale * np.array([2, 45]))
 
-
     def draw_enemy_screen(self):
         self._draw(
             screen=self.screen,
