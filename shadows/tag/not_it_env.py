@@ -60,13 +60,19 @@ FRAME_SKIP = 1
 
 
 # TODO basically just need to support a model in here for the enemy AI policy
-class TagNotItEnv(gym.Env):
+class TagBaseEnv(gym.Env):
     """Environment where the agent is 'it'."""
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": FRAMERATE}
 
     def __init__(
-        self, render_mode="rgb_array", grayscale=True, it_model=None, not_it_model=None
+        self,
+        render_mode="rgb_array",
+        grayscale=True,
+        sparse_reward=False,
+        player_it=True,
+        it_model=None,
+        not_it_model=None,
     ):
         pygame.init()
 
@@ -74,6 +80,8 @@ class TagNotItEnv(gym.Env):
         self.render_shape = tuple(int(RENDER_SCALE * s) for s in self.shape)
         self.render_mode = render_mode
         self.grayscale = grayscale
+        self.sparse_reward = sparse_reward
+        self.player_it = player_it
         self._diag = np.linalg.norm(self.shape)
 
         self.screen = pygame.Surface(self.shape)
@@ -89,8 +97,8 @@ class TagNotItEnv(gym.Env):
             )
 
         # now the enemy is it
-        self.player = Agent.player(position=[10, 10], radius=3)
-        self.enemy = Agent.enemy(position=[47, 47], radius=3, it=True)
+        self.player = Agent.player(position=[10, 10], radius=3, it=player_it)
+        self.enemy = Agent.enemy(position=[47, 47], radius=3, it=not player_it)
 
         # just for learning purposes
         self.player.color = Color.ENEMY
@@ -331,9 +339,13 @@ class TagNotItEnv(gym.Env):
     def _potential(self):
         """Potential for current state."""
         d = np.linalg.norm(self.player.position - self.enemy.position)
+        # potential for when player is it
+        p = 1 - d / self._diag
 
-        # negative of the It environment
-        return -(1 - d / self._diag)
+        # when not it, potential is negated
+        if not self.player_it:
+            p = -p
+        return p
 
     def step(self, action):
         p0 = self._potential()
@@ -387,12 +399,17 @@ class TagNotItEnv(gym.Env):
                 break
         p1 = self._potential()
 
-        # negative reward if caught
-        reward = -1 if terminated else 0
+        # when it, there is a positive reward for catching the enemy
+        reward = 1 if terminated else 0
+
+        # when not it, there is a negative reward for being caught
+        if not self.player_it:
+            reward = -reward
 
         # shaped reward
-        F = p1 - p0
-        reward += F
+        if not self.sparse_reward:
+            F = p1 - p0
+            reward += F
 
         # positive reward if not caught
         # reward = 1 if not terminated else 0
@@ -450,4 +467,16 @@ class TagNotItEnv(gym.Env):
             return self._get_rgb(self.render_screen)
 
 
+class TagItEnv(TagBaseEnv):
+    def __init__(self, **kwargs):
+        super().__init__(player_it=True, **kwargs)
+
+
+class TagNotItEnv(TagBaseEnv):
+    def __init__(self, **kwargs):
+        super().__init__(player_it=False, **kwargs)
+
+
+# register the environments
+gym.register(id="TagIt-v0", entry_point=TagItEnv)
 gym.register(id="TagNotIt-v0", entry_point=TagNotItEnv)
