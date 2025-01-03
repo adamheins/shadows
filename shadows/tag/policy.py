@@ -1,3 +1,4 @@
+import gymnasium as gym
 import pygame
 import numpy as np
 from collections import deque
@@ -7,16 +8,34 @@ from ..entity import Action
 from ..gui import Color
 
 
-N_STACK = 4
-
-
-class Observer:
-    def __init__(self, screen, agent, n_stack=N_STACK):
+class ImageObserver:
+    def __init__(self, screen, agent, n_stack=1):
         self.screen = screen
         self.agent = agent
 
         self.n_stack = n_stack
         self._past_obs = deque(maxlen=n_stack)
+
+    def space(self, shape, grayscale=True):
+        if grayscale:
+            img_shape = shape + (1,)
+        else:
+            img_shape = shape + (3,)
+
+        return gym.spaces.Dict(
+            {
+                "position": gym.spaces.Box(
+                    low=np.zeros(2, dtype=np.float32),
+                    high=np.array(shape, dtype=np.float32),
+                    shape=(2,),
+                    dtype=np.float32,
+                ),
+                "angle": gym.spaces.Box(low=-np.pi, high=np.pi, dtype=np.float32),
+                "image": gym.spaces.Box(
+                    low=0, high=255, shape=img_shape, dtype=np.uint8
+                ),
+            }
+        )
 
     def _get_rgb(self):
         """Get RGB pixel values from the given screen."""
@@ -69,11 +88,72 @@ class Observer:
         }
 
 
+class FullStateObserver:
+    def __init__(self, agent, enemy, treasures=None, n_stack=1):
+        self.agent = agent
+        self.enemy = enemy
+        self.n_stack = n_stack
+
+        if treasures is None:
+            treasures = []
+        self.treasures = treasures
+
+    def space(self, shape):
+        space = {
+            "agent_position": gym.spaces.Box(
+                low=np.zeros(2, dtype=np.float32),
+                high=np.array(shape, dtype=np.float32),
+                shape=(2,),
+                dtype=np.float32,
+            ),
+            "agent_angle": gym.spaces.Box(low=-np.pi, high=np.pi, dtype=np.float32),
+            "enemy_position": gym.spaces.Box(
+                low=np.zeros(2, dtype=np.float32),
+                high=np.array(shape, dtype=np.float32),
+                shape=(2,),
+                dtype=np.float32,
+            ),
+            "enemy_angle": gym.spaces.Box(low=-np.pi, high=np.pi, dtype=np.float32),
+        }
+
+        # add treasures
+        n = len(self.treasures)
+        if n > 0:
+            low = np.zeros(2 * n, dtype=np.float32)
+            high = np.tile(shape, n).astype(np.float32)
+            space["treasure_positions"] = gym.spaces.Box(
+                low=low, high=high, shape=2 * n, dtype=np.float32
+            )
+
+        return gym.spaces.Dict(space)
+
+    def get_observation(self):
+        obs = {
+            "agent_position": self.agent.position.astype(np.float32),
+            "agent_angle": np.array([self.agent.angle], dtype=np.float32),
+            "enemy_position": self.enemy.position.astype(np.float32),
+            "enemy_angle": np.array([self.enemy.angle], dtype=np.float32),
+        }
+        if len(self.treasures) > 0:
+            obs["treasure_positions"] = np.concatenate(
+                [t.center for t in self.treasures]
+            ).astype(np.float32)
+        return obs
+
+
 class TagAIPolicy:
     """Basic AI policy for the tag game."""
 
     def __init__(
-        self, screen, agent, player, obstacles, shape, it_model=None, not_it_model=None
+        self,
+        screen,
+        agent,
+        player,
+        obstacles,
+        shape,
+        observer,
+        it_model=None,
+        not_it_model=None,
     ):
         self.screen = screen
         self.shape = shape
@@ -81,10 +161,9 @@ class TagAIPolicy:
         self.player = player
         self.obstacles = obstacles
 
+        self.observer = observer
         self.it_model = it_model
         self.not_it_model = not_it_model
-
-        self.observer = Observer(self.screen, self.agent)
 
     def _translate_action(self, action):
         if action == 0:

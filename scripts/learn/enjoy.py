@@ -11,10 +11,13 @@ from stable_baselines3.common.vec_env import VecTransposeImage
 
 import shadows
 
+# TODO put this into the library
 ALGOS = {
     "dqn": DQN,
     "ppo": PPO,
 }
+
+TIMESTEPS = 5000
 
 
 def main():
@@ -42,7 +45,7 @@ def main():
     vec_env = model.get_env()
     obs = vec_env.reset()
     steps = 0
-    for i in range(5000):
+    for i in range(TIMESTEPS):
         action, _states = model.predict(obs, deterministic=args.deterministic)
         obs, rewards, dones, info = vec_env.step(action)
 

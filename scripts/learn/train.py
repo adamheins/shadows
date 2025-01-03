@@ -21,14 +21,14 @@ from sb3_contrib import QRDQN
 import shadows
 
 
-TOTAL_TIMESTEPS = 2_000_000
+TOTAL_TIMESTEPS = 5_000_000
 
 EVAL = True
 EVAL_FREQ = 50_000
 N_EVAL_ENVS = 1
 N_EVAL_EPISODES = 5
 
-N_FRAME_STACK = 4
+N_STACK = 1
 
 
 def linear_schedule(initial_value):
@@ -155,11 +155,7 @@ def main():
         env_kwargs=env_kwargs,
     )
     env = VecTransposeImage(env)
-    env = VecFrameStack(env, n_stack=N_FRAME_STACK)
-
-    # import IPython
-    # IPython.embed()
-    # return
+    env = VecFrameStack(env, n_stack=N_STACK)
 
     # instantiate the agent
     model = make_model(
@@ -171,7 +167,7 @@ def main():
             args.env, seed=args.seed, n_envs=N_EVAL_ENVS, env_kwargs=env_kwargs
         )
         eval_env = VecTransposeImage(eval_env)
-        eval_env = VecFrameStack(eval_env, n_stack=N_FRAME_STACK)
+        eval_env = VecFrameStack(eval_env, n_stack=N_STACK)
         eval_callback = EvalCallback(
             eval_env,
             best_model_save_path=log_dir,
@@ -204,6 +200,7 @@ def main():
         "algo": args.algo,
         "seed": args.seed,
         "timesteps": TOTAL_TIMESTEPS,
+        "n_stack": N_STACK,
     }
     with open(info_path, "w") as f:
         yaml.dump(info, stream=f)
