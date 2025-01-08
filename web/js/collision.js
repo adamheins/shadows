@@ -10,6 +10,13 @@ class CollisionQuery {
     }
 }
 
+class Circle {
+    constructor(center, radius) {
+        this.center = center;
+        this.radius = radius;
+    }
+}
+
 class Segment {
     constructor(start, end) {
         this.start = start;

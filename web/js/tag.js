@@ -2,6 +2,40 @@ const TIMESTEP = 1 / 60;
 const TAG_COOLDOWN = 120;
 
 
+class Treasure extends Circle {
+    constructor(center, radius) {
+        super(center, radius);
+    }
+
+    draw(ctx) {
+        drawCircle(ctx, this.center, this.radius, "green");
+    }
+
+    updatePosition(width, height, obstacles) {
+        const r = this.radius;
+        while (true) {
+            const x = (width - 2 * r) * Math.random() + r;
+            const y = (height - 2 * r) * Math.random() + r;
+            const p = new Vec2(x, y);
+
+            let collision = false;
+            for (let i = 0; i < obstacles.length; i++) {
+                const Q = pointPolyQuery(p, obstacles[i]);
+                if (Q.distance < this.radius) {
+                    collision = true;
+                    break;
+                }
+            }
+
+            if (!collision) {
+                this.center = p;
+                break;
+            }
+        }
+    }
+}
+
+
 class TagGame {
     constructor(width, height, it_model) {
         this.width = width;
@@ -19,12 +53,22 @@ class TagGame {
             this.keyMap.delete(event.key);
         });
 
-        this.player = new Agent(new Vec2(10, 10), "red", false);
-        this.enemy = new Agent(new Vec2(40, 40), "blue", true);
+        this.player = new Agent(new Vec2(10, 25), "red", false);
+        this.enemy = new Agent(new Vec2(40, 25), "blue", true);
         this.agents = [this.player, this.enemy];
         this.itId = 1;
 
-        this.obstacles = [new Obstacle(new Vec2(20, 20), 10, 10)];
+        this.obstacles = [
+            new Obstacle(new Vec2(20, 27), 10, 10),
+            new Obstacle(new Vec2(8, 8), 5, 5),
+            new Obstacle(new Vec2(0, 37), 13, 13),
+            new Obstacle(new Vec2(37, 37), 5, 5),
+            new Obstacle(new Vec2(20, 8), 5, 7),
+            new Obstacle(new Vec2(20, 15), 22, 5),
+        ];
+
+        this.treasures = [new Treasure(new Vec2(0, 0), 1), new Treasure(new Vec2(0, 0), 1)];
+        this.treasures.forEach(treasure => treasure.updatePosition(width, height, this.obstacles));
 
         this.enemyPolicy = new TagAIPolicy(this.enemy, this.player, this.obstacles, this.width, this.height);
 
@@ -40,7 +84,10 @@ class TagGame {
         })
         this.obstacles.forEach(obstacle => {
             obstacle.draw(ctx);
-            obstacle.drawOcclusion(ctx, this.player.position, this.screenRect);
+            // obstacle.drawOcclusion(ctx, this.player.position, this.screenRect);
+        });
+        this.treasures.forEach(treasure => {
+            treasure.draw(ctx);
         });
     }
 
@@ -71,7 +118,10 @@ class TagGame {
         // do stuff with the agents
         this.player.command(playerAction);
         if (this.enemyAction) {
-            this.enemy.command(this.enemyAction);
+            // translate from model output to actual action
+            // console.log("enemyAction = ", this.enemyAction);
+            const enemyAction = new Action(new Vec2(1, 0), this.enemyAction, true, false);
+            this.enemy.command(enemyAction);
         }
 
         this.agents.forEach(agent => {
@@ -89,17 +139,13 @@ class TagGame {
                 v.y = Math.max(0, v.y);
             }
 
-            let normal = null;
             this.obstacles.forEach(obstacle => {
                 let Q = pointPolyQuery(agent.position, obstacle);
-                if (Q.distance < agent.radius) {
-                    normal = Q.normal;
+                if ((Q.distance < agent.radius) && (Q.normal.dot(v) < 0)) {
+                    const tan = Q.normal.orth();
+                    v = tan.scale(tan.dot(v));
                 }
             });
-            if (normal && normal.dot(v) < 0) {
-                const tan = normal.orth();
-                v = tan.scale(tan.dot(v));
-            }
 
             agent.velocity = v;
         });
@@ -124,11 +170,6 @@ class TagGame {
     }
 }
 
-// async function loadModel() {
-//     const session = await ort.InferenceSession.create('http://localhost:8000/dqn.onnx');
-//     return session;
-// }
-
 
 async function main() {
     const canvas = document.getElementById("canvas");
@@ -144,8 +185,8 @@ async function main() {
     try {
         const game = new TagGame(50, 50);
 
-        const it_model = await ort.InferenceSession.create('http://localhost:8000/it.onnx');
-        const not_it_model = await ort.InferenceSession.create('http://localhost:8000/not_it.onnx');
+        const itModel = await ort.InferenceSession.create('http://localhost:8000/TagIt-v0_sac.onnx');
+        const notItModel = await ort.InferenceSession.create('http://localhost:8000/TagNotIt-v0_sac.onnx');
 
         // let last = 0;
         // requestAnimationFrame(timestamp => {
@@ -158,23 +199,39 @@ async function main() {
         //     });
         // });
 
-        setInterval(() => {
+        setInterval(async function() {
             game.step();
             game.draw(ctx);
 
             // Get a new action for the AI
+            // from the AI's perspective, it is the agent and the player is the
+            // enemy
+            const agentPosition = Float32Array.from(game.enemy.position.array());
+            const agentAngle = Float32Array.from([game.enemy.angle]);
+            const enemyPosition = Float32Array.from(game.player.position.array());
+
+            // treasures should be zero'd out when player is it
+            let treasurePositions;
+            if (game.enemy.it) {
+                treasurePositions = Float32Array.from([0, 0, 0, 0]);
+            } else {
+                treasurePositions = Float32Array.from(game.treasures[0].center.array().concat(game.treasures[1].center.array()));
+            }
+
             const obs = {
-                agent_position: new ort.Tensor('float32', game.enemy.position, [2]),
-                agent_angle: new ort.Tensor('float32', game.enemy.angle, [1]),
-                enemy_position: new ort.Tensor('float32', game.player.position, [2]),
-                treasures: new ort.Tensor('float32', game.treasures[0].concat(game.treasures[1]), [4]);
+                agent_position: new ort.Tensor('float32', agentPosition, [1, 2]),
+                agent_angle: new ort.Tensor('float32', agentAngle, [1, 1]),
+                enemy_position: new ort.Tensor('float32', enemyPosition, [1, 2]),
+                treasure_positions: new ort.Tensor('float32', treasurePositions, [1, 4])
             };
 
+            let results;
             if (game.enemy.it) {
-                game.enemyAction = await it_model.run(obs);
+                results = await itModel.run(obs);
             } else {
-                game.enemyAction = await not_it_model.run(obs);
+                results = await notItModel.run(obs);
             }
+            game.enemyAction = results.tanh.cpuData[0];
         }, 1000 * TIMESTEP);
     } catch (e) {
         console.log(e);
@@ -185,5 +242,3 @@ async function main() {
 window.addEventListener("load", function() {
     main();
 });
-
-

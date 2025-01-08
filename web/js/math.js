@@ -4,6 +4,10 @@ class Vec2 {
         this.y = y;
     }
 
+    array() {
+        return [this.x, this.y];
+    }
+
     scale(s) {
         return new Vec2(s * this.x, s * this.y);
     }
