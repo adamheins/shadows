@@ -21,7 +21,7 @@ from sb3_contrib import QRDQN
 import shadows
 
 
-TOTAL_TIMESTEPS = 5_000_000
+# TOTAL_TIMESTEPS = 5_000_000
 
 EVAL = True
 EVAL_FREQ = 50_000
@@ -70,10 +70,10 @@ def make_model(algo_name, env, seed, trained_agent=None):
             algo = QRDQN
         kwargs.update(
             dict(
-                buffer_size=100000,
+                buffer_size=100_000,
                 learning_rate=1e-4,
                 batch_size=32,
-                learning_starts=100000,
+                learning_starts=100_000,
                 target_update_interval=1000,
                 train_freq=4,
                 gradient_steps=1,
@@ -95,24 +95,22 @@ def make_model(algo_name, env, seed, trained_agent=None):
                 ent_coef=0.01,
             )
         )
-    # elif algo_name == "td3":
-    #     algo = TD3
-    #     na = env.action_space.shape[0]
-    #     noise = NormalActionNoise(mean=np.zeros(na), sigma=0.1 * np.ones(na))
-    #     kwargs = dict(
-    #         env=env,
-    #         seed=seed,
-    #         policy="MultiInputPolicy",
-    #         gamma=0.98,
-    #         buffer_size=200000,
-    #         learning_starts=10000,
-    #         action_noise=noise,
-    #         gradient_steps=1,
-    #         train_freq=1,
-    #         learning_rate=1e-3,
-    #         policy_kwargs=dict(net_arch=[400, 300]),
-    #         verbose=1,
-    #     )
+    elif algo_name == "sac":
+        algo = SAC
+        kwargs.update(
+            dict(
+                learning_rate=7.3e-4,
+                buffer_size=100_000,
+                batch_size=256,
+                ent_coef="auto",
+                gamma=0.98,
+                tau=0.02,
+                train_freq=64,
+                gradient_steps=64,
+                learning_starts=100_000,
+                use_sde=True,
+            )
+        )
     else:
         raise ValueError(f"unknown model type: {algo_name}")
 
@@ -135,6 +133,9 @@ def main():
         "-T", "--trained-agent", help="Existing model to continue training."
     )
     parser.add_argument("--algo", default="dqn", help="The algorithm to use.")
+    parser.add_argument(
+        "-n", "--timesteps", type=int, required=True, help="Total number of timesteps."
+    )
     parser.add_argument("--it-model", help="Path to the trained model for 'it' agent.")
     args = parser.parse_args()
 
@@ -142,7 +143,7 @@ def main():
 
     it_model, not_it_model = None, None
     if args.it_model is not None:
-        it_model = DQN.load(args.it_model)
+        it_model = SAC.load(args.it_model)
 
     # create environment
     # use VecTransposeImage because SB3 wants channel-first format
@@ -185,7 +186,7 @@ def main():
     # train the agent
     try:
         model.learn(
-            total_timesteps=TOTAL_TIMESTEPS, progress_bar=True, callback=eval_callback
+            total_timesteps=args.timesteps, progress_bar=True, callback=eval_callback
         )
     except KeyboardInterrupt:
         print("goodbye")
@@ -199,7 +200,7 @@ def main():
         "env": args.env,
         "algo": args.algo,
         "seed": args.seed,
-        "timesteps": TOTAL_TIMESTEPS,
+        "timesteps": args.timesteps,
         "n_stack": N_STACK,
     }
     with open(info_path, "w") as f:

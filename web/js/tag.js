@@ -3,10 +3,11 @@ const TAG_COOLDOWN = 120;
 
 
 class TagGame {
-    constructor(width, height) {
+    constructor(width, height, it_model) {
         this.width = width;
         this.height = height;
         this.screenRect = new AARect(0, 0, width, height);
+        this.it_model = it_model;
 
         this.keyMap = new Map();
 
@@ -28,6 +29,8 @@ class TagGame {
         this.enemyPolicy = new TagAIPolicy(this.enemy, this.player, this.obstacles, this.width, this.height);
 
         this.tagCooldown = 0;
+
+        this.enemyAction = null;
     }
 
     draw(ctx) {
@@ -63,11 +66,13 @@ class TagGame {
 
         const lookback = this.keyMap.has("Space");
         const playerAction = new Action(new Vec2(lindir, 0), angdir, true, lookback);
-        const enemyAction = this.enemyPolicy.compute();
+        // const enemyAction = this.enemyPolicy.compute();
 
         // do stuff with the agents
         this.player.command(playerAction);
-        this.enemy.command(enemyAction);
+        if (this.enemyAction) {
+            this.enemy.command(this.enemyAction);
+        }
 
         this.agents.forEach(agent => {
             let v = agent.velocity;
@@ -119,36 +124,66 @@ class TagGame {
     }
 }
 
-async function loadModel() {
-    const session = await ort.InferenceSession.create('http://localhost:8000/dqn.onnx');
-    return session;
-}
+// async function loadModel() {
+//     const session = await ort.InferenceSession.create('http://localhost:8000/dqn.onnx');
+//     return session;
+// }
 
 
-function main() {
-
+async function main() {
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
 
-    // const model = loadModel();
-    const game = new TagGame(50, 50);
 
-    // let model = null;
-    // ort.InferenceSession.create('http://localhost:8000/dqn.onnx').then(session => {
-    //     model = session;
-    // }).catch(e => {
-    //     console.log(e);
-    // });
+    // const game = new TagGame(50, 50);
+    // setInterval(() => {
+    //     game.step();
+    //     game.draw(ctx);
+    // }, 1000 * TIMESTEP, ctx);
 
-    setInterval(() => {
-        game.step();
-        game.draw(ctx);
-    }, 1000 * TIMESTEP, ctx);
+    try {
+        const game = new TagGame(50, 50);
+
+        const it_model = await ort.InferenceSession.create('http://localhost:8000/it.onnx');
+        const not_it_model = await ort.InferenceSession.create('http://localhost:8000/not_it.onnx');
+
+        // let last = 0;
+        // requestAnimationFrame(timestamp => {
+        //     const dt = 0.001 * (timestamp - last);
+        //     last = timestamp;
+        //
+        //     model.run(obs, action => {
+        //         game.step(dt);
+        //         game.draw(ctx);
+        //     });
+        // });
+
+        setInterval(() => {
+            game.step();
+            game.draw(ctx);
+
+            // Get a new action for the AI
+            const obs = {
+                agent_position: new ort.Tensor('float32', game.enemy.position, [2]),
+                agent_angle: new ort.Tensor('float32', game.enemy.angle, [1]),
+                enemy_position: new ort.Tensor('float32', game.player.position, [2]),
+                treasures: new ort.Tensor('float32', game.treasures[0].concat(game.treasures[1]), [4]);
+            };
+
+            if (game.enemy.it) {
+                game.enemyAction = await it_model.run(obs);
+            } else {
+                game.enemyAction = await not_it_model.run(obs);
+            }
+        }, 1000 * TIMESTEP);
+    } catch (e) {
+        console.log(e);
+    }
 }
 
 
 window.addEventListener("load", function() {
     main();
-})
+});
 
 

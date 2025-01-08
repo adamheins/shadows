@@ -14,7 +14,10 @@ class ImageObserver:
         self.agent = agent
 
         self.n_stack = n_stack
-        self._past_obs = deque(maxlen=n_stack)
+
+        # initialize the stack of observations
+        obs = self._get_single_observation()
+        self._past_obs = deque([obs] * n_stack, maxlen=n_stack)
 
     def space(self, shape, grayscale=True):
         if grayscale:
@@ -73,19 +76,20 @@ class ImageObserver:
         # add the new observation
         self._past_obs.append(obs)
 
-        # fill up the queue at first
-        while len(self._past_obs) < self._past_obs.maxlen:
-            self._past_obs.append(obs)
+        stack = {}
+        for key in obs.keys():
+            stack[key] = np.concatenate([obs[key] for obs in self._past_obs], axis=-1)
+        return stack
 
         # concatenate the queue to produce the stacked observation
-        position = np.concatenate([obs["position"] for obs in self._past_obs])
-        angle = np.concatenate([obs["angle"] for obs in self._past_obs])
-        image = np.concatenate([obs["image"] for obs in self._past_obs], axis=-1)
-        return {
-            "position": position,
-            "angle": angle,
-            "image": image,
-        }
+        # position = np.concatenate([obs["position"] for obs in self._past_obs])
+        # angle = np.concatenate([obs["angle"] for obs in self._past_obs])
+        # image = np.concatenate([obs["image"] for obs in self._past_obs], axis=-1)
+        # return {
+        #     "position": position,
+        #     "angle": angle,
+        #     "image": image,
+        # }
 
 
 class FullStateObserver:
@@ -113,7 +117,7 @@ class FullStateObserver:
                 shape=(2,),
                 dtype=np.float32,
             ),
-            "enemy_angle": gym.spaces.Box(low=-np.pi, high=np.pi, dtype=np.float32),
+            # "enemy_angle": gym.spaces.Box(low=-np.pi, high=np.pi, dtype=np.float32),
         }
 
         # add treasures
@@ -122,7 +126,7 @@ class FullStateObserver:
             low = np.zeros(2 * n, dtype=np.float32)
             high = np.tile(shape, n).astype(np.float32)
             space["treasure_positions"] = gym.spaces.Box(
-                low=low, high=high, shape=2 * n, dtype=np.float32
+                low=low, high=high, shape=(2 * n,), dtype=np.float32
             )
 
         return gym.spaces.Dict(space)
@@ -132,7 +136,7 @@ class FullStateObserver:
             "agent_position": self.agent.position.astype(np.float32),
             "agent_angle": np.array([self.agent.angle], dtype=np.float32),
             "enemy_position": self.enemy.position.astype(np.float32),
-            "enemy_angle": np.array([self.enemy.angle], dtype=np.float32),
+            # "enemy_angle": np.array([self.enemy.angle], dtype=np.float32),
         }
         if len(self.treasures) > 0:
             obs["treasure_positions"] = np.concatenate(
@@ -166,20 +170,33 @@ class TagAIPolicy:
         self.not_it_model = not_it_model
 
     def _translate_action(self, action):
-        if action == 0:
-            angdir = 1
-        elif action == 1:
-            angdir = 0
-        elif action == 2:
-            angdir = -1
-
+        # if action < 3:
+        #     lindir = 1
+        # else:
+        #     lindir = 0
+        #
+        # m = action % 3
+        # if m == 0:
+        #     angdir = 1
+        # elif m == 1:
+        #     angdir = 0
+        # elif m == 2:
+        #     angdir = -1
+        #
+        # return Action(
+        #     lindir=[lindir, 0],
+        #     angdir=angdir,
+        #     target=None,
+        #     reload=False,
+        #     frame=Action.LOCAL,
+        #     lookback=False,
+        # )
         return Action(
             lindir=[1, 0],
-            angdir=angdir,
+            angdir=action,
             target=None,
             reload=False,
             frame=Action.LOCAL,
-            lookback=False,
         )
 
     def _default_it_policy(self):
@@ -205,6 +222,11 @@ class TagAIPolicy:
 
     def _learned_it_policy(self):
         obs = self.observer.get_observation()
+
+        # it model ignores treasures entirely
+        if "treasure_positions" in obs:
+            obs["treasure_positions"].fill(0)
+
         action, _ = self.it_model.predict(obs, deterministic=False)
         return self._translate_action(action)
 

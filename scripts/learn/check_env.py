@@ -24,6 +24,8 @@ def main():
     obs, info = env.reset(seed=args.seed)
     check_env(env)
 
+    print(env.observation_space)
+
     # try some random actions
     for _ in range(1000):
         action = env.action_space.sample()

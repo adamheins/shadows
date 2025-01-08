@@ -5,17 +5,10 @@ import os
 import yaml
 import pygame
 
-from stable_baselines3 import DQN, PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import VecTransposeImage
 
 import shadows
-
-# TODO put this into the library
-ALGOS = {
-    "dqn": DQN,
-    "ppo": PPO,
-}
 
 TIMESTEPS = 5000
 
@@ -39,7 +32,7 @@ def main():
     # load the trained agent
     env = make_vec_env(env_name, env_kwargs={"render_mode": "human"})
     env = VecTransposeImage(env)
-    model = ALGOS[algo_name].load(model_path, env=env)
+    model = shadows.ALGOS[algo_name].load(model_path, env=env)
 
     # enjoy trained agent
     vec_env = model.get_env()

@@ -70,7 +70,7 @@ class TagGame:
         self.obstacles = [
             Obstacle(20, 27, 10, 10),
             Obstacle(8, 8, 5, 5),
-            Obstacle(8, 37, 5, 5),
+            Obstacle(0, 37, 13, 13),
             Obstacle(37, 37, 5, 5),
             Obstacle(20, 8, 5, 7),
             Obstacle(20, 15, 22, 5),
@@ -93,7 +93,9 @@ class TagGame:
 
         self.tag_cooldown = 0
 
-        self.observer = FullStateObserver(agent=self.enemy, enemy=self.player)
+        self.observer = FullStateObserver(
+            agent=self.enemy, enemy=self.player, treasures=self.treasures
+        )
         self.enemy_policy = TagAIPolicy(
             screen=self.screen,
             agent=self.enemy,
@@ -153,8 +155,9 @@ class TagGame:
                 treasure.draw(surface=screen, scale=scale)
 
         if draw_treasure:
+            # TODO render on a background?
             text = f"Score: {int(self.score)}"
-            image = self.font.render(text, True, (0, 255, 0))
+            image = self.font.render(text, True, (255, 255, 255))
             screen.blit(image, scale * np.array([2, 45]))
 
     def draw_enemy_screen(self):
@@ -226,7 +229,7 @@ class TagGame:
             agent.velocity = v
 
         # check if someone has collected a treasure
-        for i, agent in enumerate(self.agents):
+        for agent in self.agents:
             if agent.it:
                 continue
 

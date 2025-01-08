@@ -19,7 +19,7 @@ TIMESTEP = 1.0 / FRAMERATE
 SHAPE = (50, 50)
 
 # use continuous linear and angular velocity as the actions
-USE_CONTINUOUS_ACTIONS = False
+USE_CONTINUOUS_ACTIONS = True
 
 # learn from observations of the screen pixels
 USE_IMAGE_OBSERVATIONS = False
@@ -101,7 +101,8 @@ class TagBaseEnv(gym.Env):
         self.obstacles = [
             Obstacle(20, 27, 10, 10),
             Obstacle(8, 8, 5, 5),
-            Obstacle(8, 37, 5, 5),
+            # Obstacle(8, 37, 5, 5),
+            Obstacle(0, 37, 13, 13),
             Obstacle(37, 37, 5, 5),
             # Obstacle(37, 8, 5, 5),
             Obstacle(20, 8, 5, 7),
@@ -114,9 +115,9 @@ class TagBaseEnv(gym.Env):
 
         if USE_CONTINUOUS_ACTIONS:
             self.action_space = gym.spaces.Box(
-                low=-np.ones(2, dtype=np.float32),
-                high=np.ones(2, dtype=np.float32),
-                shape=(2,),
+                low=-np.ones(1, dtype=np.float32),
+                high=np.ones(1, dtype=np.float32),
+                shape=(1,),
                 dtype=np.float32,
             )
         else:
@@ -128,7 +129,9 @@ class TagBaseEnv(gym.Env):
                 self.shape, grayscale=grayscale
             )
         else:
-            self.observer = FullStateObserver(self.player, self.enemy, n_stack=n_stack)
+            self.observer = FullStateObserver(
+                self.player, self.enemy, treasures=self.treasures, n_stack=n_stack
+            )
             self.observation_space = self.observer.space(self.shape)
 
         self.enemy_policy = TagAIPolicy(
@@ -158,8 +161,8 @@ class TagBaseEnv(gym.Env):
     def _translate_action(self, action):
         if USE_CONTINUOUS_ACTIONS:
             return Action(
-                lindir=[action[0], 0],
-                angdir=action[1],
+                lindir=[1, 0],
+                angdir=action,
                 target=None,
                 reload=False,
                 frame=Action.LOCAL,
@@ -193,16 +196,14 @@ class TagBaseEnv(gym.Env):
         self._steps = 0
 
         r = self.player.radius
-        w, h = self.shape
 
-        agents = [self.player]
-
+        agents = [self.player, self.enemy]
         for agent_idx, agent in enumerate(agents):
             agent.angle = self.np_random.uniform(low=-np.pi, high=np.pi)
 
             # generate collision-free position for each agent
             while True:
-                agent.position = self.np_random.uniform(low=(0, 0), high=(w, h))
+                agent.position = self.np_random.uniform(low=(0, 0), high=self.shape)
 
                 # avoid collision with obstacles
                 collision = False
@@ -223,10 +224,11 @@ class TagBaseEnv(gym.Env):
                     break
 
         # update treasure positions
-        for treasure in self.treasures:
-            treasure.update_position(
-                shape=self.shape, obstacles=self.obstacles, rng=self.np_random
-            )
+        if not self.player_it:
+            for treasure in self.treasures:
+                treasure.update_position(
+                    shape=self.shape, obstacles=self.obstacles, rng=self.np_random
+                )
 
         self._draw(self.screen, self.screen_rect)
         obs = self.observer.get_observation()
@@ -278,15 +280,31 @@ class TagBaseEnv(gym.Env):
                 agent.velocity = v
 
             # check if player has collected a treasure
-            for treasure in self.treasures:
-                d = np.linalg.norm(self.player.position - treasure.center)
-                if d <= self.player.radius + treasure.radius:
-                    treasures_collected += 1
-                    treasure.update_position(
-                        shape=self.shape,
-                        obstacles=self.obstacles,
-                        rng=self.np_random,
-                    )
+            # for treasure in self.treasures:
+            #     d = np.linalg.norm(self.player.position - treasure.center)
+            #     if d <= self.player.radius + treasure.radius:
+            #         treasures_collected += 1
+            #         treasure.update_position(
+            #             shape=self.shape,
+            #             obstacles=self.obstacles,
+            #             rng=self.np_random,
+            #         )
+
+            # check if treasures have been collected
+            if not self.player_it:
+                for agent in agents:
+                    if agent.it:
+                        continue
+
+                    for treasure in self.treasures:
+                        d = np.linalg.norm(agent.position - treasure.center)
+                        if d <= agent.radius + treasure.radius:
+                            treasures_collected += 1
+                            treasure.update_position(
+                                shape=self.shape,
+                                obstacles=self.obstacles,
+                                rng=self.np_random,
+                            )
 
             for agent in agents:
                 agent.step(TIMESTEP)
@@ -309,12 +327,15 @@ class TagBaseEnv(gym.Env):
         # when not it, there is a negative reward for being caught
         if not self.player_it:
             reward = -reward
-            reward += 0.1 * treasures_collected
+            reward += 0.5 * treasures_collected
 
-        # shaped reward
+        # shape reward with potential function
         if not self.sparse_reward:
             F = p1 - p0
             reward += F
+
+        # encourage high velocities
+        # reward += self.player.last_vel_mag / PLAYER_FORWARD_VEL / self.max_steps
 
         if VERBOSE:
             if terminated:

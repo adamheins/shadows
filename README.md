@@ -73,13 +73,15 @@ poetry install
   getting stuck in corners or against walls)
   - doing with with the agent that just moves exactly toward the agent overfits
 
+Revised approach
+* TagIt DQN 2e6 works okay
+* TagNotIt DQN 5e6 works okay, but doesn't really look for treasure
+* PPO generally seems to have worse behaviour
+* SAC actually works quite well
+  - the 1e6 timestep model seems to work better than 2e6 for NotIt
+  - should try with using the actual trained It model
 
-* idea: train a model to predict where the other agent is despite occlusions
-* can I somehow shift the burden off the RL agent? can I just learn a
-  residual?
-  - if I can see enemy pixels, just steer toward enemy, else use RL
-    policy
-    
+* see if I can encourage more treasure-seeking behaviour for NotIt
 
 ## Possible other games
 ### Shooting Game
@@ -95,6 +97,8 @@ poetry install
   bouncing off of other bodies subject to gravity and also shooting to propel
   others away (possibly to propel yourself as well?) and seeking to gather
   treasures
+* Inverted pendulum game (unrelated to these games really): free swing
+  and hold, try to get a ball to some goal location
 
 ## References
 On residual policy learning:
