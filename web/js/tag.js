@@ -1,5 +1,6 @@
 const TIMESTEP = 1 / 60;
 const TAG_COOLDOWN = 120;
+const SCALE = 10;
 
 
 class Treasure extends Circle {
@@ -7,8 +8,8 @@ class Treasure extends Circle {
         super(center, radius);
     }
 
-    draw(ctx) {
-        drawCircle(ctx, this.center, this.radius, "green");
+    draw(ctx, scale=1) {
+        drawCircle(ctx, this.center.scale(scale), scale * this.radius, "green");
     }
 
     updatePosition(width, height, obstacles) {
@@ -73,21 +74,21 @@ class TagGame {
         this.enemyPolicy = new TagAIPolicy(this.enemy, this.player, this.obstacles, this.width, this.height);
 
         this.tagCooldown = 0;
-
+        this.score = 0;
         this.enemyAction = null;
     }
 
     draw(ctx) {
-        ctx.clearRect(0, 0, this.width, this.height);
+        ctx.clearRect(0, 0, SCALE * this.width, SCALE * this.height);
         this.agents.forEach(agent => {
-            agent.draw(ctx);
+            agent.draw(ctx, SCALE);
         })
         this.obstacles.forEach(obstacle => {
-            obstacle.draw(ctx);
+            obstacle.draw(ctx, SCALE);
             // obstacle.drawOcclusion(ctx, this.player.position, this.screenRect);
         });
         this.treasures.forEach(treasure => {
-            treasure.draw(ctx);
+            treasure.draw(ctx, SCALE);
         });
     }
 
@@ -149,6 +150,28 @@ class TagGame {
 
             agent.velocity = v;
         });
+
+        // check if someone has collected a treasure
+        for (let i = 0; i < this.agents.length; i++) {
+            if (i === this.itId) {
+                continue;
+            }
+
+            const agent = this.agents[i];
+            this.treasures.forEach(treasure => {
+                const d = agent.position.subtract(treasure.center).length();
+                if (d <= agent.radius + treasure.radius) {
+                    if (i === 0) {
+                        this.score += 1;
+                    } else {
+                        this.score -= 1;
+                    }
+                    console.log(this.score);
+
+                    treasure.updatePosition(this.width, this.height, this.obstacles);
+                }
+            });
+        }
 
         // check if someone has been tagged
         if (this.tagCooldown === 0) {

@@ -34,15 +34,17 @@ class Agent {
         return new Vec2(c, -s);
     }
 
-    draw(ctx, drawOutline=true) {
-        drawCircle(ctx, this.position, this.radius, this.color);
-        // const end = this.position.add(this.dir.rotate(this.angle));
-        const end = this.position.add(this.direction().scale(this.radius));
-        drawLine(ctx, this.position, end, "black");
+    draw(ctx, scale=1, drawOutline=true) {
+        const p = this.position.scale(scale);
+        const r = scale * this.radius;
 
         if (drawOutline && this.it) {
-            drawCircle(ctx, this.position, this.radius, "yellow", false);
+            drawCircle(ctx, p, r + scale, "yellow");
         }
+
+        drawCircle(ctx, p, r, this.color);
+        const end = p.add(this.direction().scale(r));
+        drawLine(ctx, p, end, "black");
     }
 
     command(action) {

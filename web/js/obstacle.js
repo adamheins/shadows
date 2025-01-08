@@ -9,8 +9,8 @@ class Obstacle extends AARect {
         this.color = "black";
     }
 
-    draw(ctx) {
-        drawRect(ctx, this.position, this.width, this.height, this.color);
+    draw(ctx, scale=1) {
+        drawRect(ctx, this.position.scale(scale), scale * this.width, scale * this.height, this.color);
     }
 
     computeWitnessVertices(point, tol=1e-8) {
