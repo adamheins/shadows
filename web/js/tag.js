@@ -90,9 +90,12 @@ class TagGame {
         this.treasures.forEach(treasure => {
             treasure.draw(ctx, SCALE);
         });
+        ctx.font = "24px sans";
+        ctx.fillStyle = "white";
+        ctx.fillText("Score: " + this.score, SCALE * 1, SCALE * (this.height - 1));
     }
 
-    step() {
+    step(dt) {
         this.tagCooldown = Math.max(0, this.tagCooldown - 1);
 
         // parse the keys and update the agent poses
@@ -189,42 +192,31 @@ class TagGame {
             this.agents[this.itId].velocity = new Vec2(0, 0);
         }
 
-        this.agents.forEach(agent => agent.step(TIMESTEP));
+        this.agents.forEach(agent => agent.step(dt));
     }
 }
 
-
-async function main() {
+function main() {
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
 
+    const game = new TagGame(50, 50);
 
-    // const game = new TagGame(50, 50);
-    // setInterval(() => {
-    //     game.step();
-    //     game.draw(ctx);
-    // }, 1000 * TIMESTEP, ctx);
+    // load the AI models
+    let itModelPromise = ort.InferenceSession.create('http://localhost:8000/TagIt-v0_sac.onnx');
+    let notItModelPromise = ort.InferenceSession.create('http://localhost:8000/TagNotIt-v0_sac.onnx');
 
-    try {
-        const game = new TagGame(50, 50);
+    Promise.all([itModelPromise, notItModelPromise]).then(models => {
+        console.log("Loaded models.");
+        const itModel = models[0];
+        const notItModel = models[1];
 
-        const itModel = await ort.InferenceSession.create('http://localhost:8000/TagIt-v0_sac.onnx');
-        const notItModel = await ort.InferenceSession.create('http://localhost:8000/TagNotIt-v0_sac.onnx');
+        let lastTime = Date.now();
 
-        // let last = 0;
-        // requestAnimationFrame(timestamp => {
-        //     const dt = 0.001 * (timestamp - last);
-        //     last = timestamp;
-        //
-        //     model.run(obs, action => {
-        //         game.step(dt);
-        //         game.draw(ctx);
-        //     });
-        // });
-
-        setInterval(async function() {
-            game.step();
-            game.draw(ctx);
+        function loop() {
+            const now = Date.now();
+            const dt = now - lastTime;
+            lastTime = now;
 
             // Get a new action for the AI
             // from the AI's perspective, it is the agent and the player is the
@@ -250,15 +242,20 @@ async function main() {
 
             let results;
             if (game.enemy.it) {
-                results = await itModel.run(obs);
+                results = itModel.run(obs);
             } else {
-                results = await notItModel.run(obs);
+                results = notItModel.run(obs);
             }
-            game.enemyAction = results.tanh.cpuData[0];
-        }, 1000 * TIMESTEP);
-    } catch (e) {
-        console.log(e);
-    }
+            results.then(r => {
+                game.enemyAction = r.tanh.cpuData[0];
+            });
+
+            game.step(dt / 1000);
+            game.draw(ctx);
+        }
+
+        setInterval(loop, 1000 * TIMESTEP);
+    });
 }
 
 
