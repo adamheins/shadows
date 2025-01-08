@@ -71,9 +71,10 @@ class Obstacle extends AARect {
         return [right, extraRight].concat(screenVs).concat([extraLeft, left]);
     }
 
-    drawOcclusion(ctx, viewpoint, screenRect) {
+    drawOcclusion(ctx, viewpoint, screenRect, scale=1) {
         const vertices = this.computeOcclusion(viewpoint, screenRect);
-        drawPolygon(ctx, vertices, this.color);
+        const scaled = vertices.map(v => v.scale(scale));
+        drawPolygon(ctx, scaled, this.color);
     }
 }
 

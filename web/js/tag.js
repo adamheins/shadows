@@ -78,21 +78,23 @@ class TagGame {
         this.enemyAction = null;
     }
 
-    draw(ctx) {
-        ctx.clearRect(0, 0, SCALE * this.width, SCALE * this.height);
+    draw(ctx, scale=1) {
+        ctx.clearRect(0, 0, scale * this.width, scale * this.height);
+        this.treasures.forEach(treasure => {
+            treasure.draw(ctx, scale);
+        });
         this.agents.forEach(agent => {
-            agent.draw(ctx, SCALE);
+            agent.draw(ctx, scale);
         })
         this.obstacles.forEach(obstacle => {
-            obstacle.draw(ctx, SCALE);
-            // obstacle.drawOcclusion(ctx, this.player.position, this.screenRect);
+            obstacle.draw(ctx, scale);
+            obstacle.drawOcclusion(ctx, this.player.position, this.screenRect, scale);
         });
-        this.treasures.forEach(treasure => {
-            treasure.draw(ctx, SCALE);
-        });
-        ctx.font = "24px sans";
+
+        // draw the score
+        ctx.font = "20px sans";
         ctx.fillStyle = "white";
-        ctx.fillText("Score: " + this.score, SCALE * 1, SCALE * (this.height - 1));
+        ctx.fillText("Score: " + this.score, scale * 1, scale * (this.height - 1));
     }
 
     step(dt) {
@@ -197,8 +199,8 @@ class TagGame {
 }
 
 function main() {
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
+    const ctx = document.getElementById("canvas").getContext("2d");
+    const smallCtx = document.getElementById("small").getContext("2d");
 
     const game = new TagGame(50, 50);
 
@@ -248,17 +250,33 @@ function main() {
             }
             results.then(r => {
                 game.enemyAction = r.tanh.cpuData[0];
+                game.step(dt / 1000);
+                game.draw(ctx, SCALE);
             });
 
-            game.step(dt / 1000);
-            game.draw(ctx);
+            // game.step(dt / 1000);
+            // game.draw(ctx, SCALE);
+
+            // game.draw(smallCtx, 1);
+            // ctx.scale(0.1, 0.1);
+            // const data = smallCtx.getImageData(0, 0, 50, 50);
+            // let r = 0
+            // for (let i = 0; i < 10000; i += 4) {
+            //     if (data.data[i] === 255) {
+            //         r += 1;
+            //     }
+            // }
+            // console.log(r);
+            // ctx.scale(10, 10);
+            // console.log(data);
+
+            // requestAnimationFrame(loop);
         }
 
+        // requestAnimationFrame(loop);
         setInterval(loop, 1000 * TIMESTEP);
     });
 }
 
 
-window.addEventListener("load", function() {
-    main();
-});
+window.addEventListener("load", main);
