@@ -1,7 +1,11 @@
-class Vec2 {
+export class Vec2 {
     constructor(x, y) {
         this.x = x;
         this.y = y;
+    }
+
+    array() {
+        return [this.x, this.y];
     }
 
     scale(s) {
@@ -46,7 +50,7 @@ class Vec2 {
 }
 
 
-function angle2pi(v, start=0) {
+export function angle2pi(v, start=0) {
     // negative for y is because we are in a left-handed frame
     let a = Math.atan2(-v.y, v.x) - start;
     if (a < 0) {
@@ -56,7 +60,7 @@ function angle2pi(v, start=0) {
 }
 
 
-function wrapToPi(x) {
+export function wrapToPi(x) {
     // Wrap a value to [-pi, pi]
     while (x > Math.PI) {
         x -= 2 * Math.PI;

@@ -1,5 +1,7 @@
+import { Vec2, angle2pi } from "./math";
 
-class TagAIPolicy {
+
+export class TagAIPolicy {
     constructor(agent, player, obstacles, width, height) {
         this.agent = agent;
         this.player = player;

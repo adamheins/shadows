@@ -2,23 +2,28 @@
 <html>
   <head>
     <title>Shadow Tag</title>
+    <link rel="stylesheet" href="https://static.adamheins.com/css/bones.css">
     <link rel="stylesheet" href="css/shadows.css">
   </head>
   <body>
     <div class="container">
       <h1>Shadow Tag</h1>
-      <canvas id="canvas" width="50" height="50"></canvas>
+      <p>Note: playing on mobile is not currently supported.</p>
+      <canvas id="canvas" width="500" height="500"></canvas>
       <div>
         <p>
-          A game of tag. If you're outlined in yellow, then you're it. Catch the
-          other player to tag them. Otherwise, avoid being caught by the other
-          player!
+          A game of tag. You are the red player. If you're outlined in yellow,
+          then you're it. Catch the blue player to tag them. Otherwise, avoid
+          being caught by the other player! You are briefly frozen when caught.
         </p>
         <p>
-          You cannot see behind obstacles. When not it, you can also only see
-          ahead of you, but you can look behind you at the cost of moving
-          slower.
+          When not it, collect the green treasures to get points.
+          You cannot see behind obstacles.
         </p>
+        <p>
+          The computer-controlled blue player was trained using reinforcement
+          learning.
+        <p>
         <table>
           <tr>
             <th>Key</th>
@@ -40,20 +45,14 @@
             <td>D</td>
             <td>turn right</td>
           </tr>
-          <tr>
-            <td>Space</td>
-            <td>look back (when not it)</td>
-          </tr>
+          <!-- <tr> -->
+          <!--   <td>Space</td> -->
+          <!--   <td>look back (when not it)</td> -->
+          <!-- </tr> -->
         </table>
       </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
-    <script src="js/math.js"></script>
-    <script src="js/collision.js"></script>
-    <script src="js/gui.js"></script>
-    <script src="js/obstacle.js"></script>
-    <script src="js/agent.js"></script>
-    <script src="js/policy.js"></script>
-    <script src="js/tag.js"></script>
+    <script src="dist/tag.min.js"></script>
   </body>
 </html>

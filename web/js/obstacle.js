@@ -1,4 +1,8 @@
-class Obstacle extends AARect {
+import { drawRect, drawPolygon } from "./gui";
+import { AARect } from "./collision";
+
+
+export class Obstacle extends AARect {
     constructor(position, width, height) {
         super(position.x, position.y, width, height);
 
@@ -9,8 +13,8 @@ class Obstacle extends AARect {
         this.color = "black";
     }
 
-    draw(ctx) {
-        drawRect(ctx, this.position, this.width, this.height, this.color);
+    draw(ctx, scale=1) {
+        drawRect(ctx, this.position.scale(scale), scale * this.width, scale * this.height, this.color);
     }
 
     computeWitnessVertices(point, tol=1e-8) {
@@ -71,9 +75,10 @@ class Obstacle extends AARect {
         return [right, extraRight].concat(screenVs).concat([extraLeft, left]);
     }
 
-    drawOcclusion(ctx, viewpoint, screenRect) {
+    drawOcclusion(ctx, viewpoint, screenRect, scale=1) {
         const vertices = this.computeOcclusion(viewpoint, screenRect);
-        drawPolygon(ctx, vertices, this.color);
+        const scaled = vertices.map(v => v.scale(scale));
+        drawPolygon(ctx, scaled, this.color);
     }
 }
 

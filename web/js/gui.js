@@ -1,4 +1,4 @@
-function drawCircle(ctx, position, radius, color, fill=true) {
+export function drawCircle(ctx, position, radius, color, fill=true) {
     ctx.beginPath();
     ctx.arc(position.x, position.y, radius, 0, 2 * Math.PI);
     if (fill) {
@@ -10,7 +10,7 @@ function drawCircle(ctx, position, radius, color, fill=true) {
     }
 }
 
-function drawPolygon(ctx, vertices, color) {
+export function drawPolygon(ctx, vertices, color) {
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.moveTo(vertices[0].x, vertices[0].y);
@@ -21,12 +21,12 @@ function drawPolygon(ctx, vertices, color) {
     ctx.fill();
 }
 
-function drawRect(ctx, position, width, height, color) {
+export function drawRect(ctx, position, width, height, color) {
     ctx.fillStyle = color;
     ctx.fillRect(position.x, position.y, width, height);
 }
 
-function drawLine(ctx, start, end, color) {
+export function drawLine(ctx, start, end, color) {
     ctx.strokeStyle = color;
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);

@@ -1,3 +1,5 @@
+import { Vec2 } from "./math";
+
 class CollisionQuery {
     constructor(distance=null, time=null, normal=null, p1=null, p2=null, intersect=null
     ) {
@@ -10,7 +12,14 @@ class CollisionQuery {
     }
 }
 
-class Segment {
+export class Circle {
+    constructor(center, radius) {
+        this.center = center;
+        this.radius = radius;
+    }
+}
+
+export class Segment {
     constructor(start, end) {
         this.start = start;
         this.end = end;
@@ -21,7 +30,7 @@ class Segment {
     }
 }
 
-class Polygon {
+export class Polygon {
     constructor(vertices) {
         this.vertices = vertices;
 
@@ -36,7 +45,7 @@ class Polygon {
     }
 }
 
-class AARect extends Polygon {
+export class AARect extends Polygon {
     constructor(x, y, w, h) {
         const vertices = [new Vec2(x, y), new Vec2(x, y + h), new Vec2(x + w, y + h), new Vec2(x + w, y)];
         super(vertices);
@@ -49,7 +58,7 @@ class AARect extends Polygon {
 }
 
 
-function lineRectEdgeIntersection(p, v, rect, tol = 1e-8) {
+export function lineRectEdgeIntersection(p, v, rect, tol = 1e-8) {
     let ts = [];
 
     // vertical edges
@@ -68,7 +77,7 @@ function lineRectEdgeIntersection(p, v, rect, tol = 1e-8) {
 }
 
 
-function pointSegmentQuery(point, segment, tol = 1e-8) {
+export function pointSegmentQuery(point, segment, tol = 1e-8) {
     const q = segment.start.subtract(point);
 
     const t = -q.dot(segment.v) / segment.v.dot(segment.v);
@@ -90,7 +99,7 @@ function pointSegmentQuery(point, segment, tol = 1e-8) {
 }
 
 
-function pointPolyQuery(point, poly) {
+export function pointPolyQuery(point, poly) {
     const n = poly.vertices.length;
 
     // inward-facing depth values for each edge

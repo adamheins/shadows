@@ -1,3 +1,6 @@
+import { Vec2, wrapToPi } from "./math";
+import { drawCircle, drawLine } from "./gui";
+
 const PLAYER_FORWARD_VEL = 75;  // px per second
 const PLAYER_BACKWARD_VEL = 30;  // px per second
 const PLAYER_IT_VEL = 50;  // px per second
@@ -5,7 +8,7 @@ const PLAYER_ANGVEL = 5;  // rad per second
 
 
 // Action for the agent to take
-class Action {
+export class Action {
     constructor(lindir, angdir = 0, localFrame = true, lookback = false) {
         this.lindir = lindir;
         this.angdir = angdir;
@@ -15,7 +18,7 @@ class Action {
 }
 
 
-class Agent {
+export class Agent {
     constructor(position, color, it=false) {
         this.position = position;
         this.angle = 0;
@@ -34,15 +37,17 @@ class Agent {
         return new Vec2(c, -s);
     }
 
-    draw(ctx, drawOutline=true) {
-        drawCircle(ctx, this.position, this.radius, this.color);
-        // const end = this.position.add(this.dir.rotate(this.angle));
-        const end = this.position.add(this.direction().scale(this.radius));
-        drawLine(ctx, this.position, end, "black");
+    draw(ctx, scale=1, drawOutline=true) {
+        const p = this.position.scale(scale);
+        const r = scale * this.radius;
 
         if (drawOutline && this.it) {
-            drawCircle(ctx, this.position, this.radius, "yellow", false);
+            drawCircle(ctx, p, r + scale, "yellow");
         }
+
+        drawCircle(ctx, p, r, this.color);
+        const end = p.add(this.direction().scale(r));
+        drawLine(ctx, p, end, "black");
     }
 
     command(action) {
