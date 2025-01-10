@@ -9,6 +9,8 @@ const TIMESTEP = 1 / 60;
 const TAG_COOLDOWN = 60;
 const SCALE = 10;
 
+const MODEL_URL = "https://static.adamheins.com/projects/shadows/models"
+
 
 class Treasure extends Circle {
     constructor(center, radius) {
@@ -210,8 +212,8 @@ function main() {
     const game = new TagGame(50, 50);
 
     // load the AI models
-    let itModelPromise = ort.InferenceSession.create('http://localhost:8000/TagIt-v0_sac.onnx');
-    let notItModelPromise = ort.InferenceSession.create('http://localhost:8000/TagNotIt-v0_sac.onnx');
+    let itModelPromise = ort.InferenceSession.create(MODEL_URL + "/TagIt-v0_sac.onnx");
+    let notItModelPromise = ort.InferenceSession.create(MODEL_URL + "/TagNotIt-v0_sac.onnx");
 
     Promise.all([itModelPromise, notItModelPromise]).then(models => {
         console.log("Loaded models.");

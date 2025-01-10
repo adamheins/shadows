@@ -13,7 +13,7 @@ from .treasure import Treasure
 FRAMERATE = 60
 TIMESTEP = 1.0 / FRAMERATE
 
-TAG_COOLDOWN = 120  # ticks
+TAG_COOLDOWN = 60  # ticks
 
 # for more efficiency we can turn off continuous collision detection
 USE_CCD = False
