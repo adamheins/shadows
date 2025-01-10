@@ -1,5 +1,12 @@
+import { TagAIPolicy } from "./policy";
+import { Obstacle } from "./obstacle";
+import { drawCircle } from "./gui";
+import { AARect, Circle, pointPolyQuery } from "./collision";
+import { Vec2 } from "./math";
+import { Action, Agent } from "./agent";
+
 const TIMESTEP = 1 / 60;
-const TAG_COOLDOWN = 120;
+const TAG_COOLDOWN = 60;
 const SCALE = 10;
 
 
@@ -38,11 +45,10 @@ class Treasure extends Circle {
 
 
 class TagGame {
-    constructor(width, height, it_model) {
+    constructor(width, height) {
         this.width = width;
         this.height = height;
         this.screenRect = new AARect(0, 0, width, height);
-        this.it_model = it_model;
 
         this.keyMap = new Map();
 
@@ -125,7 +131,6 @@ class TagGame {
         this.player.command(playerAction);
         if (this.enemyAction) {
             // translate from model output to actual action
-            // console.log("enemyAction = ", this.enemyAction);
             const enemyAction = new Action(new Vec2(1, 0), this.enemyAction, true, false);
             this.enemy.command(enemyAction);
         }
@@ -171,7 +176,6 @@ class TagGame {
                     } else {
                         this.score -= 1;
                     }
-                    console.log(this.score);
 
                     treasure.updatePosition(this.width, this.height, this.obstacles);
                 }
@@ -179,6 +183,7 @@ class TagGame {
         }
 
         // check if someone has been tagged
+        // no tagging can happen in the cooldown period
         if (this.tagCooldown === 0) {
             const d = this.player.position.subtract(this.enemy.position).length();
             if (d < this.player.radius + this.enemy.radius) {
@@ -200,7 +205,7 @@ class TagGame {
 
 function main() {
     const ctx = document.getElementById("canvas").getContext("2d");
-    const smallCtx = document.getElementById("small").getContext("2d");
+    // const smallCtx = document.getElementById("small").getContext("2d");
 
     const game = new TagGame(50, 50);
 

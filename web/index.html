@@ -8,20 +8,17 @@
   <body>
     <div class="container">
       <h1>Shadow Tag</h1>
-      <canvas id="small" width="50" height="50" hidden></canvas>
       <canvas id="canvas" width="500" height="500"></canvas>
       <div>
         <p>
           A game of tag. You are the red player. If you're outlined in yellow,
           then you're it. Catch the blue player to tag them. Otherwise, avoid
-          being caught by the other player! When not it, collect the green
-          treasures to get points.
+          being caught by the other player! You are briefly frozen when caught.
         </p>
-        <!-- <p> -->
-        <!--   You cannot see behind obstacles. When not it, you can also only see -->
-        <!--   ahead of you, but you can look behind you at the cost of moving -->
-        <!--   slower. -->
-        <!-- </p> -->
+        <p>
+          When not it, collect the green treasures to get points.
+          You cannot see behind obstacles.
+        </p>
         <table>
           <tr>
             <th>Key</th>
@@ -51,12 +48,6 @@
       </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
-    <script src="js/math.js"></script>
-    <script src="js/collision.js"></script>
-    <script src="js/gui.js"></script>
-    <script src="js/obstacle.js"></script>
-    <script src="js/agent.js"></script>
-    <script src="js/policy.js"></script>
-    <script src="js/tag.js"></script>
+    <script src="dist/tag.min.js"></script>
   </body>
 </html>

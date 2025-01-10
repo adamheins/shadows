@@ -1,3 +1,6 @@
+import { Vec2, wrapToPi } from "./math";
+import { drawCircle, drawLine } from "./gui";
+
 const PLAYER_FORWARD_VEL = 75;  // px per second
 const PLAYER_BACKWARD_VEL = 30;  // px per second
 const PLAYER_IT_VEL = 50;  // px per second
@@ -5,7 +8,7 @@ const PLAYER_ANGVEL = 5;  // rad per second
 
 
 // Action for the agent to take
-class Action {
+export class Action {
     constructor(lindir, angdir = 0, localFrame = true, lookback = false) {
         this.lindir = lindir;
         this.angdir = angdir;
@@ -15,7 +18,7 @@ class Action {
 }
 
 
-class Agent {
+export class Agent {
     constructor(position, color, it=false) {
         this.position = position;
         this.angle = 0;

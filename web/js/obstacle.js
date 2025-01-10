@@ -1,4 +1,8 @@
-class Obstacle extends AARect {
+import { drawRect, drawPolygon } from "./gui";
+import { AARect } from "./collision";
+
+
+export class Obstacle extends AARect {
     constructor(position, width, height) {
         super(position.x, position.y, width, height);
 
