@@ -9,7 +9,7 @@ const TIMESTEP = 1 / 60;
 const TAG_COOLDOWN = 60;
 const SCALE = 10;
 
-const MODEL_URL = "https://static.adamheins.com/projects/shadows/models"
+const MODEL_URL = "https://adamheins.com/projects/shadows/models"
 
 
 class Treasure extends Circle {
