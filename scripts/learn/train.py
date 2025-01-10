@@ -123,7 +123,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("env", help="Environment name.")
     parser.add_argument(
-        "--n-envs", type=int, default=8, help="Number of parallel environments."
+        "--n-envs", type=int, default=1, help="Number of parallel environments."
     )
     parser.add_argument(
         "--seed", type=int, default=0, help="Number of parallel environments."
