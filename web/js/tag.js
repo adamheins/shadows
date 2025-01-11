@@ -210,10 +210,12 @@ class TagGame {
 function main() {
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
-    // const smallCtx = document.getElementById("small").getContext("2d");
+
+    ctx.font = "20px sans";
+    ctx.fillStyle = "black";
+    ctx.fillText("Loading...", 10, 30);
 
     const scale = Math.min(canvas.width, canvas.height) / SIZE;
-    console.log(scale);
     const game = new TagGame(SIZE, SIZE, scale);
 
     // load the AI models
@@ -222,71 +224,59 @@ function main() {
 
     Promise.all([itModelPromise, notItModelPromise]).then(models => {
         console.log("Loaded models.");
-        const itModel = models[0];
-        const notItModel = models[1];
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillText("Press any key to start...", 10, 30);
 
-        let lastTime = Date.now();
+        document.addEventListener("keypress", function start(event) {
+            const itModel = models[0];
+            const notItModel = models[1];
 
-        function loop() {
-            const now = Date.now();
-            const dt = now - lastTime;
-            lastTime = now;
+            let lastTime = Date.now();
 
-            // Get a new action for the AI
-            // from the AI's perspective, it is the agent and the player is the
-            // enemy
-            const agentPosition = Float32Array.from(game.enemy.position.array());
-            const agentAngle = Float32Array.from([game.enemy.angle]);
-            const enemyPosition = Float32Array.from(game.player.position.array());
+            function loop() {
+                const now = Date.now();
+                const dt = now - lastTime;
+                lastTime = now;
 
-            // treasures should be zero'd out when player is it
-            let treasurePositions;
-            if (game.enemy.it) {
-                treasurePositions = Float32Array.from([0, 0, 0, 0]);
-            } else {
-                treasurePositions = Float32Array.from(game.treasures[0].center.array().concat(game.treasures[1].center.array()));
+                // Get a new action for the AI
+                // from the AI's perspective, it is the agent and the player is the
+                // enemy
+                const agentPosition = Float32Array.from(game.enemy.position.array());
+                const agentAngle = Float32Array.from([game.enemy.angle]);
+                const enemyPosition = Float32Array.from(game.player.position.array());
+
+                // treasures should be zero'd out when player is it
+                let treasurePositions;
+                if (game.enemy.it) {
+                    treasurePositions = Float32Array.from([0, 0, 0, 0]);
+                } else {
+                    treasurePositions = Float32Array.from(game.treasures[0].center.array().concat(game.treasures[1].center.array()));
+                }
+
+                const obs = {
+                    agent_position: new ort.Tensor('float32', agentPosition, [1, 2]),
+                    agent_angle: new ort.Tensor('float32', agentAngle, [1, 1]),
+                    enemy_position: new ort.Tensor('float32', enemyPosition, [1, 2]),
+                    treasure_positions: new ort.Tensor('float32', treasurePositions, [1, 4])
+                };
+
+                let results;
+                if (game.enemy.it) {
+                    results = itModel.run(obs);
+                } else {
+                    results = notItModel.run(obs);
+                }
+                results.then(r => {
+                    game.enemyAction = r.tanh.cpuData[0];
+                    game.step(dt / 1000);
+                    game.draw(ctx);
+                });
             }
-
-            const obs = {
-                agent_position: new ort.Tensor('float32', agentPosition, [1, 2]),
-                agent_angle: new ort.Tensor('float32', agentAngle, [1, 1]),
-                enemy_position: new ort.Tensor('float32', enemyPosition, [1, 2]),
-                treasure_positions: new ort.Tensor('float32', treasurePositions, [1, 4])
-            };
-
-            let results;
-            if (game.enemy.it) {
-                results = itModel.run(obs);
-            } else {
-                results = notItModel.run(obs);
-            }
-            results.then(r => {
-                game.enemyAction = r.tanh.cpuData[0];
-                game.step(dt / 1000);
-                game.draw(ctx);
-            });
-
-            // game.step(dt / 1000);
-            // game.draw(ctx, SCALE);
-
-            // game.draw(smallCtx, 1);
-            // ctx.scale(0.1, 0.1);
-            // const data = smallCtx.getImageData(0, 0, 50, 50);
-            // let r = 0
-            // for (let i = 0; i < 10000; i += 4) {
-            //     if (data.data[i] === 255) {
-            //         r += 1;
-            //     }
-            // }
-            // console.log(r);
-            // ctx.scale(10, 10);
-            // console.log(data);
 
             // requestAnimationFrame(loop);
-        }
-
-        // requestAnimationFrame(loop);
-        setInterval(loop, 1000 * TIMESTEP);
+            setInterval(loop, 1000 * TIMESTEP);
+            document.removeEventListener("keypress", start);
+        });
     });
 }
 
