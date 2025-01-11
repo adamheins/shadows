@@ -8,17 +8,11 @@ Node is required to install dependencies:
 ```
 npm install
 ```
+
 Then compile the Javascript:
 ```
 npx rollup --config
 ```
 
-## Run locally
-
-The onnx models need to be served locally. In one terminal, do:
-```
-cd onnx
-npx http-server -p 8000 --cors
-```
-
-Then open `index.html` in your browser of choice and enjoy!
+Finally, open `index.html` in your browser of choice to play. The AI models are
+loaded from a server.

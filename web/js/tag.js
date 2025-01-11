@@ -7,10 +7,10 @@ import { Action, Agent } from "./agent";
 
 const TIMESTEP = 1 / 60;
 const TAG_COOLDOWN = 60;
+const SIZE = 50;
 const SCALE = 10;
 
 const MODEL_URL = "https://adamheins.com/projects/shadows/models";
-// const MODEL_URL = "http://localhost:8000";
 
 
 class Treasure extends Circle {
@@ -48,9 +48,10 @@ class Treasure extends Circle {
 
 
 class TagGame {
-    constructor(width, height) {
+    constructor(width, height, scale) {
         this.width = width;
         this.height = height;
+        this.scale = scale;
         this.screenRect = new AARect(0, 0, width, height);
 
         this.keyMap = new Map();
@@ -87,23 +88,23 @@ class TagGame {
         this.enemyAction = null;
     }
 
-    draw(ctx, scale=1) {
-        ctx.clearRect(0, 0, scale * this.width, scale * this.height);
+    draw(ctx) {
+        ctx.clearRect(0, 0, this.scale * this.width, this.scale * this.height);
         this.treasures.forEach(treasure => {
-            treasure.draw(ctx, scale);
+            treasure.draw(ctx, this.scale);
         });
         this.agents.forEach(agent => {
-            agent.draw(ctx, scale);
+            agent.draw(ctx, this.scale);
         })
         this.obstacles.forEach(obstacle => {
-            obstacle.draw(ctx, scale);
-            obstacle.drawOcclusion(ctx, this.player.position, this.screenRect, scale);
+            obstacle.draw(ctx, this.scale);
+            obstacle.drawOcclusion(ctx, this.player.position, this.screenRect, this.scale);
         });
 
         // draw the score
         ctx.font = "20px sans";
         ctx.fillStyle = "white";
-        ctx.fillText("Score: " + this.score, scale * 1, scale * (this.height - 1));
+        ctx.fillText("Score: " + this.score, this.scale * 1, this.scale * (this.height - 1));
     }
 
     step(dt) {
@@ -207,10 +208,13 @@ class TagGame {
 }
 
 function main() {
-    const ctx = document.getElementById("canvas").getContext("2d");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
     // const smallCtx = document.getElementById("small").getContext("2d");
 
-    const game = new TagGame(50, 50);
+    const scale = Math.min(canvas.width, canvas.height) / SIZE;
+    console.log(scale);
+    const game = new TagGame(SIZE, SIZE, scale);
 
     // load the AI models
     let itModelPromise = ort.InferenceSession.create(MODEL_URL + "/TagIt-v0_sac.onnx");
@@ -259,7 +263,7 @@ function main() {
             results.then(r => {
                 game.enemyAction = r.tanh.cpuData[0];
                 game.step(dt / 1000);
-                game.draw(ctx, SCALE);
+                game.draw(ctx);
             });
 
             // game.step(dt / 1000);
