@@ -9,7 +9,8 @@ const TIMESTEP = 1 / 60;
 const TAG_COOLDOWN = 60;
 const SCALE = 10;
 
-const MODEL_URL = "https://adamheins.com/projects/shadows/models"
+const MODEL_URL = "https://adamheins.com/projects/shadows/models";
+// const MODEL_URL = "http://localhost:8000";
 
 
 class Treasure extends Circle {
@@ -112,16 +113,16 @@ class TagGame {
         let lindir = 0;
         let angdir = 0;
 
-        if (this.keyMap.has("d")) {
+        if (this.keyMap.has("d") || this.keyMap.has("ArrowRight")) {
             angdir -= 1;
         }
-        if (this.keyMap.has("a")) {
+        if (this.keyMap.has("a") || this.keyMap.has("ArrowLeft")) {
             angdir += 1
         }
-        if (this.keyMap.has("w")) {
+        if (this.keyMap.has("w") || this.keyMap.has("ArrowUp")) {
             lindir += 1
         }
-        if (this.keyMap.has("s")) {
+        if (this.keyMap.has("s") || this.keyMap.has("ArrowDown")) {
             lindir -= 1
         }
 
