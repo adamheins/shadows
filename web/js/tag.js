@@ -225,7 +225,7 @@ function main() {
     const ctx = canvas.getContext("2d");
 
     // Preserve aspect ratio
-    const w = document.getElementById("canvas").offsetWidth;
+    const w = document.getElementById("container").offsetWidth;
     canvas.width = w;
     canvas.height = w;
 
