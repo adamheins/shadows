@@ -283,19 +283,19 @@ function main() {
         }
     });
 
-    // canvas.addEventListener("touchstart", event => {
-    //     mouseDown = true;
-    //     game.target = new Vec2(event.offsetX, event.offsetY);
-    // });
-    // document.addEventListener("touchend", event => {
-    //     mouseDown = false;
-    //     game.target = null;
-    // });
-    // canvas.addEventListener("touchmove", event => {
-    //     if (mouseDown) {
-    //         game.target = new Vec2(event.offsetX, event.offsetY);
-    //     }
-    // });
+    canvas.addEventListener("touchstart", event => {
+        mouseDown = true;
+        game.target = new Vec2(event.pageX, event.pageY);
+    });
+    document.addEventListener("touchend", event => {
+        mouseDown = false;
+        game.target = null;
+    });
+    canvas.addEventListener("touchmove", event => {
+        if (mouseDown) {
+            game.target = new Vec2(event.pageX, event.pageY);
+        }
+    });
 
     // load the AI models
     let itModelPromise = ort.InferenceSession.create(MODEL_URL + "/TagIt-v0_sac.onnx");
@@ -307,7 +307,6 @@ function main() {
         ctx.fillText("Press any key to start...", 10, 30);
 
         function start(event) {
-            console.log("start");
             document.removeEventListener("keypress", start);
             document.removeEventListener("mousedown", start);
 
