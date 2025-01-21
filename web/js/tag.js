@@ -8,7 +8,6 @@ import { Action, Agent } from "./agent";
 const TIMESTEP = 1 / 60;
 const TAG_COOLDOWN = 60;
 const SIZE = 50;
-const SCALE = 10;
 
 const MODEL_URL = "https://adamheins.com/projects/shadows/models";
 
@@ -225,7 +224,9 @@ function main() {
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
 
-    // const pad = document.getElementById("controlpad");
+    // Preserve aspect ratio
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetWidth;
 
     ctx.font = "20px sans";
     ctx.fillStyle = "black";
@@ -283,9 +284,13 @@ function main() {
         }
     });
 
+    const rect = canvas.getBoundingClientRect();
+
     canvas.addEventListener("touchstart", event => {
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
         mouseDown = true;
-        game.target = new Vec2(event.pageX, event.pageY);
+        game.target = new Vec2(x, y);
     });
     document.addEventListener("touchend", event => {
         mouseDown = false;
@@ -293,7 +298,9 @@ function main() {
     });
     canvas.addEventListener("touchmove", event => {
         if (mouseDown) {
-            game.target = new Vec2(event.pageX, event.pageY);
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            game.target = new Vec2(x, y);
         }
     });
 
