@@ -109,6 +109,7 @@ def make_model(algo_name, env, seed, trained_agent=None):
                 gradient_steps=64,
                 learning_starts=100_000,
                 use_sde=True,
+                # policy_kwargs=dict(net_arch=[400, 300]),
             )
         )
     else:

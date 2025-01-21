@@ -2,7 +2,7 @@ import { TagAIPolicy } from "./policy";
 import { Obstacle } from "./obstacle";
 import { drawCircle } from "./gui";
 import { AARect, Circle, pointPolyQuery } from "./collision";
-import { Vec2 } from "./math";
+import { Vec2, angle2pi } from "./math";
 import { Action, Agent } from "./agent";
 
 const TIMESTEP = 1 / 60;
@@ -55,6 +55,7 @@ class TagGame {
         this.screenRect = new AARect(0, 0, width, height);
 
         this.keyMap = new Map();
+        this.target = null;
 
         document.addEventListener("keydown", (event) => {
             this.keyMap.set(event.key, true);
@@ -114,17 +115,30 @@ class TagGame {
         let lindir = 0;
         let angdir = 0;
 
-        if (this.keyMap.has("d") || this.keyMap.has("ArrowRight")) {
-            angdir -= 1;
-        }
-        if (this.keyMap.has("a") || this.keyMap.has("ArrowLeft")) {
-            angdir += 1
-        }
-        if (this.keyMap.has("w") || this.keyMap.has("ArrowUp")) {
-            lindir += 1
-        }
-        if (this.keyMap.has("s") || this.keyMap.has("ArrowDown")) {
-            lindir -= 1
+        if (this.target) {
+            lindir = 1;
+
+            const delta = this.target.scale(1. / this.scale).subtract(this.player.position);
+            const orth = this.player.direction().orth();
+
+            if (delta.dot(orth) >= 0) {
+                angdir += 1;
+            } else {
+                angdir -= 1;
+            }
+        } else {
+            if (this.keyMap.has("d") || this.keyMap.has("ArrowRight")) {
+                angdir -= 1;
+            }
+            if (this.keyMap.has("a") || this.keyMap.has("ArrowLeft")) {
+                angdir += 1
+            }
+            if (this.keyMap.has("w") || this.keyMap.has("ArrowUp")) {
+                lindir += 1
+            }
+            if (this.keyMap.has("s") || this.keyMap.has("ArrowDown")) {
+                lindir -= 1
+            }
         }
 
         const lookback = this.keyMap.has("Space");
@@ -211,12 +225,77 @@ function main() {
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
 
+    // const pad = document.getElementById("controlpad");
+
     ctx.font = "20px sans";
     ctx.fillStyle = "black";
     ctx.fillText("Loading...", 10, 30);
 
     const scale = Math.min(canvas.width, canvas.height) / SIZE;
     const game = new TagGame(SIZE, SIZE, scale);
+
+    let mouseDown = false;
+
+    // function mouse(event) {
+    //     const x = 3 * event.offsetX / pad.width;
+    //     const y = 3 * event.offsetY / pad.height;
+    //
+    //     game.keyMap.clear();
+    //     if (x <= 1) {
+    //         game.keyMap.set("a", true);
+    //     } else if (x >= 2) {
+    //         game.keyMap.set("d", true);
+    //     }
+    //
+    //     if (y <= 1) {
+    //         game.keyMap.set("w", true);
+    //     } else if (y >= 2) {
+    //         game.keyMap.set("s", true);
+    //     }
+    // }
+    //
+    // pad.addEventListener("mousedown", event => {
+    //     mouseDown = true;
+    //     mouse(event);
+    // });
+    // pad.addEventListener("mouseup", event => {
+    //     mouseDown = false;
+    //     game.keyMap.clear();
+    // });
+    // pad.addEventListener("mousemove", event => {
+    //     if (mouseDown) {
+    //         game.keyMap.clear();
+    //         mouse(event);
+    //     }
+    // });
+
+    canvas.addEventListener("mousedown", event => {
+        mouseDown = true;
+        game.target = new Vec2(event.offsetX, event.offsetY);
+    });
+    document.addEventListener("mouseup", event => {
+        mouseDown = false;
+        game.target = null;
+    });
+    canvas.addEventListener("mousemove", event => {
+        if (mouseDown) {
+            game.target = new Vec2(event.offsetX, event.offsetY);
+        }
+    });
+
+    // canvas.addEventListener("touchstart", event => {
+    //     mouseDown = true;
+    //     game.target = new Vec2(event.offsetX, event.offsetY);
+    // });
+    // document.addEventListener("touchend", event => {
+    //     mouseDown = false;
+    //     game.target = null;
+    // });
+    // canvas.addEventListener("touchmove", event => {
+    //     if (mouseDown) {
+    //         game.target = new Vec2(event.offsetX, event.offsetY);
+    //     }
+    // });
 
     // load the AI models
     let itModelPromise = ort.InferenceSession.create(MODEL_URL + "/TagIt-v0_sac.onnx");
@@ -227,7 +306,11 @@ function main() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.fillText("Press any key to start...", 10, 30);
 
-        document.addEventListener("keypress", function start(event) {
+        function start(event) {
+            console.log("start");
+            document.removeEventListener("keypress", start);
+            document.removeEventListener("mousedown", start);
+
             const itModel = models[0];
             const notItModel = models[1];
 
@@ -275,8 +358,10 @@ function main() {
 
             // requestAnimationFrame(loop);
             setInterval(loop, 1000 * TIMESTEP);
-            document.removeEventListener("keypress", start);
-        });
+        }
+
+        document.addEventListener("keypress", start);
+        document.addEventListener("mousedown", start);
     });
 }
 
