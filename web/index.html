@@ -1,17 +1,19 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <title>Shadow Tag</title>
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="Adam Heins">
+
     <link rel="stylesheet" href="https://static.adamheins.com/css/bones.css">
     <link rel="stylesheet" href="css/shadows.css">
   </head>
   <body>
     <div id="container" class="container">
       <h1>Shadow Tag</h1>
-      <p>Note: playing on mobile is not currently supported.</p>
-      <!-- <canvas id="canvas" width="700" height="700"></canvas> -->
       <canvas id="canvas"></canvas>
-      <!-- <canvas id="controlpad" width="210" height="210" style="margin: 0 auto; display: block;"></canvas> -->
       <div>
         <p>
           A game of tag. You are the red player. If you're outlined in yellow,
@@ -27,6 +29,16 @@
           The computer-controlled blue player was trained using reinforcement
           learning. The code is available <a href="https://github.com/adamheins/shadows">here</a>.
         <p>
+
+        <h2>Controls</h2>
+        The player can be controlled with <em>either</em> the keyboard or the
+        mouse/touch.
+
+        <p>
+          <strong>Mouse/touch:</strong> Click/press and drag the mouse to
+          indicate the point to steer toward.
+        </p>
+
         <table>
           <tr>
             <th>Key</th>

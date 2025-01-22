@@ -102,9 +102,8 @@ class TagGame {
         });
 
         // draw the score
-        ctx.font = "20px sans";
         ctx.fillStyle = "white";
-        ctx.fillText("Score: " + this.score, this.scale * 1, this.scale * (this.height - 1));
+        ctx.fillText("Score " + this.score, this.scale * 0.5, this.scale * (this.height - 1));
     }
 
     step(dt) {
@@ -115,11 +114,23 @@ class TagGame {
         let angdir = 0;
 
         if (this.target) {
-            lindir = 1;
+            // TODO I want to change lindir if target is close to the body
+            // lindir = 1;
 
             const delta = this.target.scale(1. / this.scale).subtract(this.player.position);
-            const orth = this.player.direction().orth();
 
+            const d = delta.length();
+            const r = this.player.radius;
+            if (d <= r) {
+                lindir = 0;
+            } else if (d >= 3 * r) {
+                lindir = 1;
+            } else {
+                lindir = (d - r) / (2 * r);
+            }
+
+            // turn toward the target
+            const orth = this.player.direction().orth();
             if (delta.dot(orth) >= 0) {
                 angdir += 1;
             } else {
@@ -223,13 +234,18 @@ class TagGame {
 function main() {
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
+    const container = document.getElementById("container")
 
     // Preserve aspect ratio
-    const w = document.getElementById("container").offsetWidth;
+    const w = container.offsetWidth;
     canvas.width = w;
     canvas.height = w;
 
-    ctx.font = "20px sans";
+    const font = window.getComputedStyle(container, null).getPropertyValue("font");
+    console.log(window.getComputedStyle(container, null).getPropertyValue("font-size"));
+    console.log(window.getComputedStyle(container, null).getPropertyValue("font-family"));
+
+    ctx.font = font;
     ctx.fillStyle = "black";
     ctx.fillText("Loading...", 10, 30);
 
@@ -237,39 +253,6 @@ function main() {
     const game = new TagGame(SIZE, SIZE, scale);
 
     let mouseDown = false;
-
-    // function mouse(event) {
-    //     const x = 3 * event.offsetX / pad.width;
-    //     const y = 3 * event.offsetY / pad.height;
-    //
-    //     game.keyMap.clear();
-    //     if (x <= 1) {
-    //         game.keyMap.set("a", true);
-    //     } else if (x >= 2) {
-    //         game.keyMap.set("d", true);
-    //     }
-    //
-    //     if (y <= 1) {
-    //         game.keyMap.set("w", true);
-    //     } else if (y >= 2) {
-    //         game.keyMap.set("s", true);
-    //     }
-    // }
-    //
-    // pad.addEventListener("mousedown", event => {
-    //     mouseDown = true;
-    //     mouse(event);
-    // });
-    // pad.addEventListener("mouseup", event => {
-    //     mouseDown = false;
-    //     game.keyMap.clear();
-    // });
-    // pad.addEventListener("mousemove", event => {
-    //     if (mouseDown) {
-    //         game.keyMap.clear();
-    //         mouse(event);
-    //     }
-    // });
 
     canvas.addEventListener("mousedown", event => {
         mouseDown = true;
@@ -287,20 +270,25 @@ function main() {
 
     const rect = canvas.getBoundingClientRect();
 
+    // use preventDefault to avoid touch events doing other stuff on the page
     canvas.addEventListener("touchstart", event => {
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
+        event.preventDefault();
+        const x = event.changedTouches[0].clientX - rect.left;
+        const y = event.changedTouches[0].clientY - rect.top;
+
         mouseDown = true;
         game.target = new Vec2(x, y);
     });
     document.addEventListener("touchend", event => {
+        event.preventDefault();
         mouseDown = false;
         game.target = null;
     });
     canvas.addEventListener("touchmove", event => {
+        event.preventDefault();
         if (mouseDown) {
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
+            const x = event.changedTouches[0].clientX - rect.left;
+            const y = event.changedTouches[0].clientY - rect.top;
             game.target = new Vec2(x, y);
         }
     });
@@ -312,11 +300,12 @@ function main() {
     Promise.all([itModelPromise, notItModelPromise]).then(models => {
         console.log("Loaded models.");
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillText("Press any key to start...", 10, 30);
+        ctx.fillText("Type/click/touch to start...", 10, 30);
 
         function start(event) {
             document.removeEventListener("keypress", start);
             document.removeEventListener("mousedown", start);
+            document.removeEventListener("touchstart", start);
 
             const itModel = models[0];
             const notItModel = models[1];
@@ -369,6 +358,7 @@ function main() {
 
         document.addEventListener("keypress", start);
         document.addEventListener("mousedown", start);
+        document.addEventListener("touchstart", start);
     });
 }
 
