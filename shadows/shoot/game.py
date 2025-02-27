@@ -7,7 +7,6 @@ from ..gui import Text, Color
 from ..entity import Agent, Action
 from ..obstacle import Obstacle
 from ..treasure import Treasure
-from .policy import TagAIPolicy, FullStateObserver
 
 
 FRAMERATE = 60
@@ -18,23 +17,20 @@ TAG_COOLDOWN = 60  # ticks
 # for more efficiency we can turn off continuous collision detection
 USE_CCD = False
 USE_AI_POLICY = True
-ALLOW_TAG_SWITCH = True
 
 N_TREASURES = 2
 TREASURE_RADIUS = 1
 OCCLUDE_TREASURES = True
-DRAW_OCCLUSIONS = False
+DRAW_OCCLUSIONS = True
 
 RENDER_SCALE = 8
 
 
-class TagGame:
+class ShootGame:
     def __init__(
         self,
         shape=(50, 50),
         display=True,
-        it_model=None,
-        not_it_model=None,
         rng=None,
     ):
         self.rng = np.random.default_rng(rng)
@@ -58,6 +54,8 @@ class TagGame:
         self.clock = pygame.time.Clock()
         self.keys_down = set()
 
+        self.projectiles = {}
+
         # self.obstacles = []
         # self.obstacles = [
         #     Obstacle(20, 20, 10, 10),
@@ -78,9 +76,8 @@ class TagGame:
 
         # player and enemy agents
         self.player = Agent.player(position=[10, 25], radius=3, it=False)
-        self.enemy = Agent.enemy(position=[40, 25], radius=3, it=True)
+        self.enemy = Agent.enemy(position=[40, 25], radius=3, it=False)
         self.agents = [self.player, self.enemy]
-        self.it_id = 1
 
         self.score = 0
         self.treasures = [
@@ -93,36 +90,36 @@ class TagGame:
 
         self.tag_cooldown = 0
 
-        self.observer = FullStateObserver(
-            agent=self.enemy, enemy=self.player, treasures=self.treasures
-        )
-        self.enemy_policy = TagAIPolicy(
-            screen=self.screen,
-            agent=self.enemy,
-            player=self.player,
-            obstacles=self.obstacles,
-            shape=self.shape,
-            observer=self.observer,
-            it_model=it_model,
-            not_it_model=not_it_model,
-        )
+        # self.observer = FullStateObserver(
+        #     agent=self.enemy, enemy=self.player, treasures=self.treasures
+        # )
+        # self.enemy_policy = TagAIPolicy(
+        #     screen=self.screen,
+        #     agent=self.enemy,
+        #     player=self.player,
+        #     obstacles=self.obstacles,
+        #     shape=self.shape,
+        #     observer=self.observer,
+        # )
 
     def _draw(
         self,
         screen,
         viewpoint,
         scale=1,
-        draw_direction=True,
         draw_outline=True,
         draw_occlusion=True,
         draw_treasure=True,
     ):
         screen.fill(Color.BACKGROUND)
 
+        for projectile in self.projectiles.values():
+            projectile.draw(surface=screen, scale=scale)
+
         for agent in self.agents:
             agent.draw(
                 surface=screen,
-                draw_direction=draw_direction,
+                draw_direction=False,
                 draw_outline=draw_outline,
                 scale=scale,
             )
@@ -165,7 +162,6 @@ class TagGame:
             screen=self.screen,
             viewpoint=self.enemy.position,
             scale=1,
-            draw_direction=False,
             draw_outline=False,
             draw_occlusion=DRAW_OCCLUSIONS,
             draw_treasure=False,
@@ -176,7 +172,6 @@ class TagGame:
             screen=self.render_screen,
             viewpoint=self.player.position,
             scale=RENDER_SCALE,
-            draw_direction=True,
             draw_outline=True,
             draw_occlusion=DRAW_OCCLUSIONS,
         )
@@ -192,7 +187,9 @@ class TagGame:
         for agent in self.agents:
             if agent.id in actions:
                 action = actions[agent.id]
-                agent.command(action)
+                projectile = agent.command(action)
+                if projectile is not None:
+                    self.projectiles[projectile.id] = projectile
 
         # agents cannot walk off the screen and into obstacles
         for agent in self.agents:
@@ -245,25 +242,56 @@ class TagGame:
                         shape=self.shape, obstacles=self.obstacles, rng=self.rng
                     )
 
-        # check if someone has been tagged
-        if self.tag_cooldown == 0:
-            it_agent = self.agents[self.it_id]
-            for i, agent in enumerate(self.agents):
-                if i == self.it_id:
+        # process projectiles
+        projectiles_to_remove = set()
+        # agents_to_remove = set()
+        for idx, projectile in self.projectiles.items():
+            # projectile has left the screen
+            if not point_in_rect(projectile.position, self.screen_rect):
+                projectiles_to_remove.add(idx)
+                continue
+
+            # path of projectile's motion over the timestep
+            segment = projectile.path(TIMESTEP)
+
+            # check for collision with obstacle
+            obs_dist = np.inf
+            for obstacle in self.obstacles:
+                Q = segment_poly_query(segment, obstacle)
+                if Q.intersect:
+                    obs_dist = min(obs_dist, Q.distance)
+                    projectiles_to_remove.add(idx)
+
+            # check for collision with an agent
+            for agent in self.agents:
+
+                # agent cannot be hit by its own bullets
+                if agent.id == projectile.agent_id:
                     continue
 
-                # switch who is "it"
-                d = agent.radius + it_agent.radius
-                if np.linalg.norm(agent.position - it_agent.position) < d:
-                    self.tag_cooldown = TAG_COOLDOWN
-                    it_agent.it = False
-                    agent.it = True
-                    self.it_id = i
-                    break
+                # check for collision with the bullet's path
+                # TODO segment_segment_dist might be better here
+                circle = agent.circle()
+                Q = segment_circle_query(segment, circle)
+                if Q.intersect:
+                    # if the projectile hit an obstacle first, then the agent
+                    # is fine
+                    if Q.distance > obs_dist:
+                        continue
 
-        # cannot move after just being tagged
-        if self.tag_cooldown > 0:
-            self.agents[self.it_id].velocity = np.zeros(2)
+                    projectiles_to_remove.add(idx)
+
+                    agent.velocity += 100 * unit(projectile.velocity)
+                    agent.health -= 1
+                    # if agent.health <= 0:
+                    #     agents_to_remove.add(agent_id)
+
+        # remove projectiles that have hit something
+        for idx in projectiles_to_remove:
+            self.projectiles.pop(idx)
+
+        for projectile in self.projectiles.values():
+            projectile.step(TIMESTEP)
 
         for agent in self.agents:
             agent.step(TIMESTEP)
@@ -273,6 +301,7 @@ class TagGame:
         while True:
 
             # process events
+            target = None
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
@@ -281,39 +310,32 @@ class TagGame:
                     self.keys_down.add(event.key)
                 elif event.type == pygame.KEYUP:
                     self.keys_down.discard(event.key)
-
-                    # manually switch who is it, for testing purposes
-                    if ALLOW_TAG_SWITCH and event.key == pygame.K_t:
-                        self.it_id = (self.it_id + 1) % len(self.agents)
-                        self.agents[0].it = not self.agents[0].it
-                        self.agents[1].it = not self.agents[1].it
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    target = np.array(pygame.mouse.get_pos()) / RENDER_SCALE
 
             # respond to events
-            lindir = 0
-            angdir = 0
+            lindir = [0, 0]
             if pygame.K_d in self.keys_down:
-                angdir -= 1
+                lindir[0] += 1
             if pygame.K_a in self.keys_down:
-                angdir += 1
+                lindir[0] -= 1
             if pygame.K_w in self.keys_down:
-                lindir += 1
+                lindir[1] -= 1
             if pygame.K_s in self.keys_down:
-                lindir -= 1
-
-            lookback = pygame.K_SPACE in self.keys_down
+                lindir[1] += 1
 
             # TODO hardcoded indices here
             actions = {}
-            if USE_AI_POLICY:
-                self.draw_enemy_screen()
-                actions[1] = self.enemy_policy.compute()
+            # if USE_AI_POLICY:
+            #     self.draw_enemy_screen()
+            #     actions[1] = self.enemy_policy.compute()
             actions[0] = Action(
-                lindir=[lindir, 0],
-                angdir=angdir,
-                target=None,
+                lindir=lindir,
+                angdir=0,
+                target=target,
                 reload=False,
-                frame=Action.LOCAL,
-                lookback=lookback,
+                frame=Action.WORLD,
+                lookback=False,
             )
 
             self.step(actions)

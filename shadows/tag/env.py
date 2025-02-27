@@ -9,8 +9,8 @@ from ..gui import Color
 from ..obstacle import Obstacle
 from ..collision import point_in_rect, point_poly_query, AARect
 from ..math import *
+from ..treasure import Treasure
 from .policy import TagAIPolicy, ImageObserver, FullStateObserver
-from .treasure import Treasure
 
 
 FRAMERATE = 60

@@ -1,7 +1,7 @@
 import numpy as np
 import pygame
 
-from ..collision import Circle, point_poly_query
+from .collision import Circle, point_poly_query
 
 
 class Treasure(Circle):

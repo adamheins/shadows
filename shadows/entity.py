@@ -12,12 +12,12 @@ PLAYER_IT_VEL = 50  # px per second
 PLAYER_ANGVEL = 5  # rad per second
 VIEW_ANGLE = np.pi / 3
 
-BULLET_VELOCITY = 500
+BULLET_VELOCITY = 100
 
 SHOT_COOLDOWN_TICKS = 20
 RELOAD_TICKS = 120
 
-PROJECTILE_RADIUS = 3
+PROJECTILE_RADIUS = 0.5
 AGENT_RADIUS = 5
 
 CLIP_SIZE = 1
@@ -100,10 +100,10 @@ class Agent(Entity):
 
         projectile = None
         if action.target is not None:
-            projectile = agent.shoot(action.target)
+            projectile = self.shoot(action.target)
 
         if action.reload:
-            agent.reload()
+            self.reload()
 
         # different speed when "it", and when looking backward
         if self.it:
@@ -218,8 +218,10 @@ class Projectile(Entity):
         self.color = Color.PROJECTILE
         self.radius = PROJECTILE_RADIUS
 
-    def draw(self, surface):
-        pygame.draw.circle(surface, self.color, self.position, self.radius)
+    def draw(self, surface, scale=1):
+        p = scale * self.position
+        r = scale * self.radius
+        pygame.draw.circle(surface, self.color, p, r)
 
     def step(self, dt):
         self.position += dt * self.velocity

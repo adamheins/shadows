@@ -4,5 +4,6 @@ from .gui import Text, Color
 from .entity import Agent, Action, Projectile
 from .obstacle import Obstacle
 from .tag import *
+from .shoot import *
 from .dqn import DQN
 from .algo import ALGOS
