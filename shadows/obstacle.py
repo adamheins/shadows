@@ -2,17 +2,31 @@ import numpy as np
 import pygame
 
 from .math import orth, unit, ORTHMAT
-from .collision import AARect, line_rect_edge_intersection
+from .collision import AARect, PaddedPoly, line_rect_edge_intersection
 from .gui import Color
 
 import time
 
 
 class Obstacle(AARect):
-    def __init__(self, x, y, w, h):
+    def __init__(self, x, y, w, h, agent_radius=None):
         super().__init__(x, y, w, h)
         self.color = Color.OBSTACLE
         self.pygame_rect = pygame.Rect(x, y, w, h)
+
+        if agent_radius is not None:
+            self.padded = PaddedPoly(self, agent_radius)
+
+    # def __init__(self, vertices, rects):
+    #     self.color = Color.OBSTACLE
+    #     self.vertices = vertices
+    #     pass
+    #
+    # def point_query(self, point):
+    #     pass
+    #
+    # def segment_query(self, segment):
+    #     pass
 
     def _compute_witness_vertices(self, point, tol=1e-8):
         deltas = self.vertices - point

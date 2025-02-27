@@ -1,6 +1,8 @@
 import pygame
 import numpy as np
 
+import time
+
 from ..collision import *
 from ..math import *
 from ..gui import Text, Color
@@ -15,7 +17,7 @@ TIMESTEP = 1.0 / FRAMERATE
 TAG_COOLDOWN = 60  # ticks
 
 # for more efficiency we can turn off continuous collision detection
-USE_CCD = False
+USE_CCD = True
 USE_AI_POLICY = True
 
 N_TREASURES = 2
@@ -66,12 +68,12 @@ class ShootGame:
         # ]
         # self.obstacles = [Obstacle(20, 20, 10, 10)]
         self.obstacles = [
-            Obstacle(20, 27, 10, 10),
-            Obstacle(8, 8, 5, 5),
-            Obstacle(0, 37, 13, 13),
-            Obstacle(37, 37, 5, 5),
-            Obstacle(20, 8, 5, 7),
-            Obstacle(20, 15, 22, 5),
+            Obstacle(20, 27, 10, 10, agent_radius=3),
+            Obstacle(8, 8, 5, 5, agent_radius=3),
+            Obstacle(0, 37, 13, 13, agent_radius=3),
+            Obstacle(37, 37, 5, 5, agent_radius=3),
+            Obstacle(20, 8, 5, 7, agent_radius=3),
+            Obstacle(20, 15, 22, 5, agent_radius=3),
         ]
 
         # player and enemy agents
@@ -210,7 +212,9 @@ class ShootGame:
                 if USE_CCD:
                     path = Segment(agent.position, agent.position + TIMESTEP * v)
                     for obstacle in self.obstacles:
-                        Q = swept_circle_poly_query(path, agent.radius, obstacle)
+                        Q = segment_padded_poly_query(path, obstacle.padded)
+                        # Q = swept_circle_poly_query(path, agent.radius, obstacle)
+
                         if Q.intersect and Q.normal @ v < 0:
                             tan = orth(Q.normal)
                             vtan = (tan @ v) * tan

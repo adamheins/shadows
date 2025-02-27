@@ -3,6 +3,9 @@ import numpy as np
 from .math import unit, orth, quad_formula
 
 
+# TODO full nonconvex poly support
+
+
 class CollisionQuery:
     def __init__(
         self, distance=None, time=None, normal=None, p1=None, p2=None, intersect=False
@@ -21,8 +24,9 @@ class CollisionQuery:
 class Polygon:
     """2D polygon."""
 
-    def __init__(self, vertices):
+    def __init__(self, vertices, primitives=None):
         self.vertices = vertices
+        self.primitives = primitives
 
         self.edges = [
             Segment(self.vertices[i], self.vertices[i + 1])
@@ -85,6 +89,26 @@ class Circle:
         self.radius = radius
 
 
+class PaddedPoly:
+    """Polygon padded with all points within given radius."""
+    def __init__(self, poly, radius):
+        self.poly = poly
+        self.radius = radius
+
+        self.circles = [Circle(center=v, radius=radius) for v in poly.vertices]
+        self.edges = [
+            Segment(start=e.start + radius * n, end=e.end + radius * n)
+            for e, n in zip(poly.edges, poly.out_normals)
+        ]
+
+        vertices = []
+        for edge in self.edges:
+            vertices.append(edge.start)
+            vertices.append(edge.end)
+        self.poly2 = Polygon(vertices)
+
+
+
 def line_rect_edge_intersection(p, v, rect):
     """Compute the intersection of a line with the edge of the screen.
 
@@ -138,6 +162,10 @@ def point_in_poly(point, poly, tol=1e-8):
     : bool
         True if the polygon contains the point, False otherwise.
     """
+    # if poly is composed of primitive shapes, then those are used for checking
+    if poly.primitives is not None:
+        return np.all([point_in_poly(point, prim, tol=tol) for prim in poly.primitves])
+
     for v, n in zip(poly.vertices, poly.in_normals):
         if (point - v) @ n < -tol:
             return False
@@ -526,6 +554,46 @@ def swept_circle_poly_query(segment, radius, poly):
             min_time_query.time is None or Q.time < min_time_query.time
         ):
             Q.normal = poly.out_normals[i]
+            min_time_query = Q
+
+    return min_time_query
+
+
+def segment_padded_poly_query(segment, padded):
+    # check if the shapes do not intersect at all
+    Q = segment_poly_query(segment, padded.poly)
+    if Q.distance > padded.radius:
+        n = unit(Q.p2 - Q.p1)
+        p1 = Q.p1 + padded.radius * n
+        d = Q.distance - padded.radius
+        return CollisionQuery(distance=d, normal=-n, p1=p1, p2=Q.p2, intersect=False)
+
+    Q = point_poly_query(segment.start, padded.poly2)
+    if Q.intersect:
+        Q.time = 0
+        return Q
+
+    for circle in padded.circles:
+        Q = point_circle_query(segment.start, circle)
+        if Q.intersect:
+            Q.time = 0
+            return Q
+
+    # find the minimum intersection time with all of the shapes
+    min_time_query = segment_circle_query(segment, padded.circles[0])
+    for circle in padded.circles[1:]:
+        Q = segment_circle_query(segment, circle)
+        if Q.intersect and (
+            min_time_query.time is None or Q.time < min_time_query.time
+        ):
+            min_time_query = Q
+
+    for i, edge in enumerate(padded.edges):
+        Q = segment_segment_query(segment, edge)
+        if Q.intersect and (
+            min_time_query.time is None or Q.time < min_time_query.time
+        ):
+            Q.normal = padded.poly.out_normals[i]
             min_time_query = Q
 
     return min_time_query
