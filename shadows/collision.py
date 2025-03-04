@@ -3,7 +3,7 @@ import numpy as np
 from .math import unit, orth, quad_formula
 
 
-# TODO full nonconvex poly support
+# TODO full nonconvex poly support (via primitives)
 
 
 class CollisionQuery:
