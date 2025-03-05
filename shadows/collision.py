@@ -76,6 +76,7 @@ class Segment:
         self.v = self.end - self.start
         self.direction = unit(self.v)
         self.normal = orth(self.direction)
+        self.length = np.linalg.norm(self.v)
 
     def __repr__(self):
         return f"Segment(start={self.start}, end={self.end})"
@@ -246,6 +247,10 @@ def point_segment_query(point, segment):
         r = segment.start + t * segment.v
         d = np.linalg.norm(point - r)
         intersect = np.isclose(d, 0)
+        # if intersect:
+        #     print("point")
+        #     import IPython
+        #     IPython.embed()
         return CollisionQuery(distance=d, p1=point, p2=r, intersect=intersect)
 
     d1 = np.linalg.norm(point - segment.start)
@@ -383,7 +388,7 @@ def segment_segment_query(segment1, segment2):
         b = np.array([v1 @ d, v2 @ d])
         t = np.linalg.solve(A, b)
 
-        # line segments actually intersect, so we are down
+        # line segments actually intersect, so we are done
         if 0 <= t[0] <= 1 and 0 <= t[1] <= 1:
             p = segment1.start + t[0] * segment1.v
             return CollisionQuery(distance=0, p1=p, p2=p, time=t[0], intersect=True)
@@ -411,20 +416,26 @@ def segment_segment_query(segment1, segment2):
     # if the lines are not parallel and/or do not intersect, then at least one
     # of the closest points must be an endpoint: check all four
     min_dist_query = point_segment_query(segment1.start, segment2)
+    min_dist_query.time = 0
 
     Q = point_segment_query(segment1.end, segment2)
     if Q.distance < min_dist_query.distance:
         min_dist_query = Q
+        min_dist_query.time = 1
 
     Q = point_segment_query(segment2.start, segment1)
     if Q.distance < min_dist_query.distance:
         Q.p1, Q.p2 = Q.p2, Q.p1
         min_dist_query = Q
 
+        # back out the intersection time
+        min_dist_query.time = (Q.p1 - segment1.start) @ segment1.direction / segment1.length
+
     Q = point_segment_query(segment2.end, segment1)
     if Q.distance < min_dist_query.distance:
         Q.p1, Q.p2 = Q.p2, Q.p1
         min_dist_query = Q
+        min_dist_query.time = (Q.p1 - segment1.start) @ segment1.direction / segment1.length
 
     return min_dist_query
 

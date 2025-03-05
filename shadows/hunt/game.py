@@ -14,8 +14,6 @@ from ..treasure import Treasure
 FRAMERATE = 60
 TIMESTEP = 1.0 / FRAMERATE
 
-TAG_COOLDOWN = 60  # ticks
-
 AGENT_RADIUS = 2
 
 ENABLE_AGENT_COLLISIONS = True
@@ -141,8 +139,6 @@ class HuntGame:
                 shape=self.shape, obstacles=self.obstacles, rng=self.rng
             )
 
-        self.tag_cooldown = 0
-
         # self.observer = FullStateObserver(
         #     agent=self.enemy, enemy=self.player, treasures=self.treasures
         # )
@@ -235,14 +231,33 @@ class HuntGame:
 
     def step(self, actions):
         """Step the game forward in time."""
-        self.tag_cooldown = max(0, self.tag_cooldown - 1)
-
         for agent in self.agents:
             if agent.id in actions:
                 action = actions[agent.id]
                 projectile = agent.command(action)
                 if projectile is not None:
                     self.projectiles[projectile.id] = projectile
+
+        # check if agents are colliding
+        # TODO I would like to be able to push the agent but this has complex
+        # interactions with the obstacles
+        if ENABLE_AGENT_COLLISIONS:
+            a0 = self.agents[0]
+            a1 = self.agents[1]
+            r = a1.position - a0.position
+            d = np.linalg.norm(r)
+            if d <= 2 * a0.radius:
+                u = unit(r)
+                tan = orth(u)
+
+                # TODO should just force the normal component to be equal
+                nv = (a1.velocity - a0.velocity) @ u
+                if nv < 0:
+                    a0.velocity = (tan @ a0.velocity) * tan - nv * u
+                    a1.velocity = (tan @ a1.velocity) * tan - nv * u
+
+                # for agent in self.agents:
+                #     agent.velocity = (tan @ agent.velocity) * tan
 
         # agents cannot walk off the screen and into obstacles
         for agent in self.agents:
@@ -279,16 +294,6 @@ class HuntGame:
                             v = (tan @ v) * tan
 
             agent.velocity = v
-
-        # check if agents are colliding
-        if ENABLE_AGENT_COLLISIONS:
-            r = self.agents[1].position - self.agents[0].position
-            d = np.linalg.norm(r)
-            if d <= 2 * self.agents[0].radius:
-                u = unit(r)
-                tan = orth(u)
-                for agent in self.agents:
-                    agent.velocity = (tan @ agent.velocity) * tan
 
         # check if someone has collected a treasure
         for agent in self.agents:
