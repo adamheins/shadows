@@ -1,12 +1,9 @@
 {
   "name": "shadows",
   "version": "0.1.0",
-  "description": "",
-  "main": "main.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "",
+  "description": "Games with reinforcement learning.",
+  "scripts": {},
+  "author": "Adam Heins <mail@adamheins.com>",
   "license": "MIT",
   "devDependencies": {
     "@rollup/plugin-terser": "^0.4.4",
