@@ -3,7 +3,9 @@
 Small 2D games with computer-controlled opponents trained using reinforcement
 learning.
 
-**You can play a demo in the browser [here](https://adamheins.com/projects/shadows/web/).**
+**You can play a demo in the browser
+[here](https://adamheins.com/projects/shadows/web/).** There is also a blog
+post with more information [here](https://adamheins.com/blog/shadows-i).
 
 The goal of this project is to explore simple but fun game mechanics, machine
 learning for games, and deploying machine learning in the browser.
