@@ -102,8 +102,8 @@ class TagGame {
         });
 
         // draw the score
-        ctx.fillStyle = "white";
-        ctx.fillText("Score " + this.score, this.scale * 0.5, this.scale * (this.height - 1));
+        // ctx.fillStyle = "white";
+        // ctx.fillText("Score " + this.score, this.scale * 0.5, this.scale * (this.height - 1));
     }
 
     step(dt) {
@@ -235,6 +235,7 @@ function main() {
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
     const container = document.getElementById("container")
+    const scoreText = document.getElementById("score");
 
     // Preserve aspect ratio
     const w = container.offsetWidth;
@@ -313,9 +314,11 @@ function main() {
             let lastTime = Date.now();
 
             function loop() {
-                const now = Date.now();
-                const dt = now - lastTime;
-                lastTime = now;
+            // function loop(now) {
+                // console.log("loop");
+                // const now = Date.now();
+                // const dt = now - lastTime;
+                // lastTime = now;
 
                 // Get a new action for the AI
                 // from the AI's perspective, it is the agent and the player is the
@@ -346,9 +349,18 @@ function main() {
                     results = notItModel.run(obs);
                 }
                 results.then(r => {
+                    // console.log("step");
+
+                    const now = Date.now();
+                    const dt = now - lastTime;
+                    console.log(dt);
+                    lastTime = now;
+
                     game.enemyAction = r.tanh.cpuData[0];
                     game.step(dt / 1000);
+                    scoreText.innerHTML = game.score;
                     game.draw(ctx);
+                    // requestAnimationFrame(loop);
                 });
             }
 
